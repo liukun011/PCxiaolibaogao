@@ -1,0 +1,5 @@
+{
+  "name": "星启 - 现场访谈尽调系统",
+  "description": "专业的现场访谈尽调管理平台，支持录音转写、问题命中分析与报告生成。",
+  "requestFramePermissions": ["microphone"]
+}

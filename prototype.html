@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星启 - 现场访谈尽调原型</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-[#F5F7FA] text-gray-800 overflow-hidden h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div class="p-6 flex items-center gap-2">
+            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                <i data-lucide="brain-circuit" size="20"></i>
+            </div>
+            <span class="text-xl font-bold tracking-tight">星启</span>
+        </div>
+        <nav class="flex-1 py-4">
+            <div class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:bg-gray-50 cursor-pointer">
+                <i data-lucide="layout-dashboard" size="20"></i><span class="text-sm font-medium">首页</span>
+            </div>
+            <div class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:bg-gray-50 cursor-pointer">
+                <i data-lucide="database" size="20"></i><span class="text-sm font-medium">我的资源</span>
+            </div>
+            <div class="flex items-center gap-3 px-4 py-3 text-gray-500 hover:bg-gray-50 cursor-pointer">
+                <i data-lucide="brain-circuit" size="20"></i><span class="text-sm font-medium">智能体广场</span>
+            </div>
+            <div class="flex items-center gap-3 px-4 py-3 text-blue-600 bg-blue-50 border-r-2 border-blue-600 cursor-pointer">
+                <i data-lucide="clipboard-check" size="20"></i><span class="text-sm font-medium">尽调管理</span>
+                <span class="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">2</span>
+            </div>
+        </nav>
+        <div class="p-4 border-t border-gray-100">
+            <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-50 text-blue-600">
+                <div class="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs">张</div>
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold">个人中心</span>
+                    <span class="text-[10px] opacity-70">高级分析师</span>
+                </div>
+                <i data-lucide="chevron-right" size="16" class="ml-auto"></i>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-y-auto">
+        <header class="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between sticky top-0 z-10">
+            <div class="flex items-center gap-2 text-sm text-gray-500">
+                <span>尽调管理</span><i data-lucide="chevron-right" size="14"></i><span class="text-gray-800 font-medium">尽调详情</span>
+            </div>
+            <button class="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium">
+                <i data-lucide="clipboard-check" size="16"></i><span>归档报告</span>
+            </button>
+        </header>
+
+        <div class="p-8 space-y-8">
+            <!-- Flow -->
+            <section class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                <h2 class="text-lg font-bold mb-6">尽调流程</h2>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-4 p-4 rounded-xl border bg-gray-50 border-gray-100">
+                        <div class="w-12 h-12 rounded-lg bg-white text-blue-600 flex items-center justify-center relative shadow-sm">
+                            <i data-lucide="file-text" size="24"></i>
+                            <div class="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5 border-2 border-white"><i data-lucide="check" size="10"></i></div>
+                        </div>
+                        <div class="flex flex-col"><span class="text-sm font-bold">收集企业资料</span><span class="text-xs text-gray-400">快速上传或填基本信息</span></div>
+                    </div>
+                    <div class="flex-1 h-px bg-gray-100"></div>
+                    <div class="flex items-center gap-4 p-4 rounded-xl border bg-blue-50 border-blue-200 shadow-sm">
+                        <div class="w-12 h-12 rounded-lg bg-blue-600 text-white flex items-center justify-center"><i data-lucide="mic" size="24"></i></div>
+                        <div class="flex flex-col"><span class="text-sm font-bold">进行现场访谈</span><span class="text-xs text-gray-400">高效访谈实时记录完整信息</span></div>
+                    </div>
+                    <div class="flex-1 h-px bg-gray-100"></div>
+                    <div class="flex items-center gap-4 p-4 rounded-xl border bg-gray-50 border-gray-100">
+                        <div class="w-12 h-12 rounded-lg bg-white text-blue-600 flex items-center justify-center"><i data-lucide="file-spreadsheet" size="24"></i></div>
+                        <div class="flex flex-col"><span class="text-sm font-bold">生成专业报告</span><span class="text-xs text-gray-400">自动整合内容生成报告</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Material -->
+            <section class="space-y-4">
+                <div class="flex items-center gap-2 text-sm font-bold"><i data-lucide="chevron-down" class="text-blue-600" size="18"></i><span>现场访谈尽调</span></div>
+                <div class="grid grid-cols-4 gap-4">
+                    <div onclick="openModal()" class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i data-lucide="mic" size="24"></i></div>
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold group-hover:text-blue-600">A公司信贷尽调访谈录音</span>
+                                <span class="text-xs text-gray-400">2025-03-03 13:03:06</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center p-8 bg-black/40 backdrop-blur-sm">
+        <div class="bg-white w-full max-w-6xl h-full rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white"><i data-lucide="mic" size="24"></i></div>
+                    <div>
+                        <h2 class="text-xl font-bold">A公司信贷尽调访谈录音</h2>
+                        <div class="flex items-center gap-4 text-xs text-gray-400 mt-1">
+                            <span>2025-03-03 13:03:06</span><span>时长: 45:20</span>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="p-2 text-gray-400 hover:bg-gray-100 rounded-full"><i data-lucide="x" size="24"></i></button>
+            </div>
+            <div class="flex-1 flex overflow-hidden">
+                <!-- Left -->
+                <div class="flex-1 flex flex-col border-r border-gray-100 bg-gray-50/30">
+                    <div class="p-8 pb-4">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+                            <div class="flex items-end justify-between gap-1 h-12" id="visualizer">
+                                <!-- Bars added by JS -->
+                            </div>
+                            <div class="flex items-center gap-6">
+                                <button onclick="togglePlay()" class="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg"><i data-lucide="play" id="playIcon"></i></button>
+                                <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-600 w-1/3"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-8 pt-0 space-y-6">
+                        <h3 class="text-sm font-bold flex items-center gap-2"><i data-lucide="file-text" class="text-blue-600" size="16"></i>录音转写全文</h3>
+                        <div class="space-y-4" id="transcript">
+                            <!-- Items added by JS -->
+                        </div>
+                    </div>
+                </div>
+                <!-- Right -->
+                <div class="w-96 flex flex-col bg-white border-l border-gray-100">
+                    <div class="p-6 border-b border-gray-100 bg-gray-50/20">
+                        <h3 class="text-sm font-bold flex items-center gap-2"><i data-lucide="target" class="text-red-500" size="16"></i>问题命中分析</h3>
+                        <p class="text-xs text-gray-400 mt-1">AI 自动识别访谈中覆盖的尽调要点</p>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-6 space-y-4" id="questions">
+                        <!-- Items added by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        function openModal() { document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal').classList.add('flex'); }
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').classList.remove('flex'); }
+
+        let isPlaying = false;
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const icon = document.getElementById('playIcon');
+            icon.setAttribute('data-lucide', isPlaying ? 'pause' : 'play');
+            lucide.createIcons();
+        }
+
+        const visualizer = document.getElementById('visualizer');
+        for(let i=0; i<40; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'w-1 bg-gray-200 rounded-full';
+            bar.style.height = (Math.random() * 30 + 10) + 'px';
+            visualizer.appendChild(bar);
+        }
+
+        const transcriptData = [
+            { speaker: '访谈员', time: '00:12', text: '您好，感谢您接受我们的访谈。请问贵公司目前的信贷规模是多少？' },
+            { speaker: '受访人', time: '00:45', text: '我们目前的总信贷规模大约在5000万左右，主要用于日常流动资金周转。' },
+            { speaker: '访谈员', time: '01:15', text: '那么，贵公司在未来的还款计划上有什么具体的安排吗？' }
+        ];
+
+        const transcriptEl = document.getElementById('transcript');
+        transcriptData.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'p-4 rounded-2xl hover:bg-white border border-transparent hover:border-gray-100 transition-all cursor-pointer';
+            div.innerHTML = `<div class="flex items-center gap-3 mb-2">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded ${item.speaker==='访谈员'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}">${item.speaker}</span>
+                <span class="text-[10px] font-mono text-gray-400">${item.time}</span>
+            </div><p class="text-sm text-gray-600">${item.text}</p>`;
+            transcriptEl.appendChild(div);
+        });
+
+        const questionsData = [
+            { q: '明确公司目前的信贷规模', hit: true, summary: '总信贷规模约5000万，用于流动资金。' },
+            { q: '核实未来的还款计划安排', hit: true, summary: '通过销售回款覆盖本金。' },
+            { q: '核查是否存在未披露的担保', hit: false }
+        ];
+
+        const questionsEl = document.getElementById('questions');
+        questionsData.forEach(q => {
+            const div = document.createElement('div');
+            div.className = `p-4 rounded-2xl border ${q.hit?'border-green-100 bg-green-50/30':'border-gray-100 bg-gray-50/50 opacity-60'}`;
+            div.innerHTML = `<div class="flex items-start justify-between gap-3">
+                <div>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${q.hit?'bg-green-100 text-green-700':'bg-gray-200 text-gray-500'}">${q.hit?'已命中':'未命中'}</span>
+                    <h4 class="text-sm font-bold mt-1">${q.q}</h4>
+                    ${q.hit ? `<div class="mt-2 text-xs text-gray-600 border-t border-green-100 pt-2"><span class="font-bold text-blue-600">AI摘要:</span> ${q.summary}</div>` : ''}
+                </div>
+                <i data-lucide="${q.hit?'check-circle-2':'x'}" class="${q.hit?'text-green-500':'text-gray-300'}" size="18"></i>
+            </div>`;
+            questionsEl.appendChild(div);
+        });
+        lucide.createIcons();
+    </script>
+</body>
+</html>
