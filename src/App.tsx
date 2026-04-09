@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { DocumentClassificationSection } from './components/DocumentClassificationSection';
 import {
   LayoutDashboard,
   FileText,
@@ -79,41 +80,45 @@ import {
   TrendingUp,
   PieChart,
   BarChart3,
-  LineChart
+  LineChart,
+  Code2,
+  FolderTree
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { mockInterview, InterviewRecord, InterviewTranscript, DDQuestion } from "./types";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
-import { saveAs } from "file-saver";
 
-type ViewType = "projectList" | "dashboard" | "audit" | "edit" | "intelligence";
+type ViewType = "projectList" | "dashboard" | "audit" | "edit" | "intelligence" | "dslEngine" | "docManager";
+
+const DSLEngineView = lazy(() =>
+  import("./views/DSLEngineView").then((module) => ({ default: module.DSLEngineView })),
+);
+
+const DocumentManagerView = lazy(() =>
+  import("./views/DocumentManagerView").then((module) => ({
+    default: module.DocumentManagerView,
+  })),
+);
+
+const loadDocxDeps = async () => {
+  const [docxModule, fileSaverModule] = await Promise.all([
+    import("docx"),
+    import("file-saver"),
+  ]);
+
+  return {
+    ...docxModule,
+    saveAs: fileSaverModule.saveAs,
+  };
+};
 
 // Sidebar Item Component
-const SidebarItem = ({ icon: Icon, label, active = false, badge = 0 }: { icon: any, label: string, active?: boolean, badge?: number }) => (
-  <div className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${active ? "bg-blue-50 text-blue-600 border-r-2 border-blue-600" : "text-gray-500 hover:bg-gray-50"}`}>
+const SidebarItem = ({ icon: Icon, label, active = false, badge = 0, onClick }: { icon: any, label: string, active?: boolean, badge?: number, onClick?: () => void }) => (
+  <div onClick={onClick} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${active ? "bg-blue-50 text-blue-600 border-r-2 border-blue-600" : "text-gray-500 hover:bg-gray-50"}`}>
     <Icon size={20} />
     <span className="text-sm font-medium">{label}</span>
     {badge > 0 && (
       <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{badge}</span>
     )}
-  </div>
-);
-
-// Process Step Component
-const ProcessStep = ({ icon: Icon, title, desc, active = false, completed = false }: { icon: any, title: string, desc: string, active?: boolean, completed?: boolean }) => (
-  <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${active ? "bg-blue-50 border-blue-200 shadow-sm" : "bg-gray-50 border-gray-100"}`}>
-    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${active ? "bg-blue-600 text-white" : "bg-white text-blue-600 shadow-sm"}`}>
-      <Icon size={24} />
-      {completed && (
-        <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5 border-2 border-white">
-          <CheckCircle2 size={12} />
-        </div>
-      )}
-    </div>
-    <div className="flex flex-col">
-      <span className="text-sm font-bold text-gray-800">{title}</span>
-      <span className="text-xs text-gray-400">{desc}</span>
-    </div>
   </div>
 );
 
@@ -164,6 +169,15 @@ const InterviewItem = ({ title, date, duration, onClick }: { title: string, date
   </div>
 );
 
+const LazyViewFallback = ({ title }: { title: string }) => (
+  <div className="flex h-full w-full items-center justify-center bg-slate-50 p-8">
+    <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-center shadow-sm">
+      <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+      <p className="text-sm font-medium text-gray-600">{title}</p>
+    </div>
+  </div>
+);
+
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>("projectList");
   const [intelligenceSource, setIntelligenceSource] = useState<"projectList" | "dashboard">("projectList");
@@ -180,6 +194,15 @@ export default function App() {
   const handlePlayToggle = () => setIsPlaying(!isPlaying);
 
   const handleDownloadDocx = async () => {
+    const {
+      AlignmentType,
+      Document,
+      HeadingLevel,
+      Packer,
+      Paragraph,
+      TextRun,
+      saveAs,
+    } = await loadDocxDeps();
     const projectName = intelligenceResult?.companyName || "A公司";
     const doc = new Document({
       sections: [
@@ -228,6 +251,8 @@ export default function App() {
   };
 
   const handleDownloadConflictDocx = async () => {
+    const { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun, saveAs } =
+      await loadDocxDeps();
     const conflicts = [
       { id: 1, type: "数据不一致", field: "2024年营业收入", sourceA: "财务报表 (1.2亿)", sourceB: "访谈记录 (1.5亿)", severity: "高风险" },
       { id: 2, type: "逻辑冲突", field: "还款计划", sourceA: "销售回款覆盖", sourceB: "抵押物变现", severity: "中风险" },
@@ -257,6 +282,8 @@ export default function App() {
   };
 
   const handleDownloadTraceabilityDocx = async () => {
+    const { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun, saveAs } =
+      await loadDocxDeps();
     const projectName = intelligenceResult?.companyName || "A公司";
     const traces = [
       { id: 1, section: "第一章：企业基本情况", content: `${projectName}成立于2010年，主要从事工业自动化设备的研发与生产...`, source: "工商登记信息 / 官方网站", confidence: "98%" },
@@ -401,8 +428,10 @@ export default function App() {
         </div>
 
         <nav className="flex-1 py-4">
-          <SidebarItem icon={ClipboardCheck} label="尽调管理" active={currentView === "projectList" || currentView === "dashboard"} />
+          <SidebarItem icon={ClipboardCheck} label="尽调管理" active={currentView === "projectList" || currentView === "dashboard"} onClick={() => setCurrentView("projectList")} />
           <SidebarItem icon={BookOpen} label="我的模板" />
+          <SidebarItem icon={Code2} label="模板引擎" active={currentView === "dslEngine"} onClick={() => setCurrentView("dslEngine")} />
+          <SidebarItem icon={FolderTree} label="资料知识库" active={currentView === "docManager"} onClick={() => setCurrentView("docManager")} />
         </nav>
 
         <div className="p-4 border-t border-gray-100">
@@ -488,8 +517,22 @@ export default function App() {
           <EditReportView
             onBack={() => setCurrentView("dashboard")}
             onDownload={handleDownloadDocx}
+            onDownloadConflict={handleDownloadConflictDocx}
+            onDownloadTraceability={handleDownloadTraceabilityDocx}
             intelligenceResult={intelligenceResult}
           />
+        )}
+
+        {currentView === "docManager" && (
+          <Suspense fallback={<LazyViewFallback title="资料知识库加载中..." />}>
+            <DocumentManagerView />
+          </Suspense>
+        )}
+
+        {currentView === "dslEngine" && (
+          <Suspense fallback={<LazyViewFallback title="模板引擎加载中..." />}>
+            <DSLEngineView />
+          </Suspense>
         )}
 
         {currentView === "intelligence" && (
@@ -669,15 +712,11 @@ export default function App() {
 const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: { onSelectProject: () => void, onStartIntelligence: () => void, onDirectNew: (projectName: string, companyName: string, template: string, initialQuestions: any[], targetType?: string, targetCode?: string, enableAI?: boolean) => void }) => {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [showDirectNewModal, setShowDirectNewModal] = useState(false);
-  const [modalStep, setModalStep] = useState<1 | 2>(1);
   const [customProjectName, setCustomProjectName] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("bank");
-  const [editingQuestions, setEditingQuestions] = useState<any[]>([]);
-  const [newQuestionText, setNewQuestionText] = useState("");
   const [targetType, setTargetType] = useState<"company" | "individual">("company");
   const [targetCode, setTargetCode] = useState("");
-  const [enableAI, setEnableAI] = useState(true);
 
   const templates = [
     { id: "bank", title: "银行流贷尽调", desc: "关注经营现金流与抵押物状况", icon: Building },
@@ -702,22 +741,25 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
     ]
   };
 
-  const handleNextStep = (e?: React.MouseEvent) => {
-    if (e) e.preventDefault(); // 防止失去焦点导致的点击被吞
-    if (!customProjectName.trim() || !newProjectName.trim()) return;
-    setEditingQuestions([...templateQuestions[selectedTemplate]]);
-    setModalStep(2);
-  };
-
   const handleCreateProject = () => {
-    onDirectNew(customProjectName.trim(), newProjectName.trim(), selectedTemplate, editingQuestions, targetType, targetCode, enableAI);
+    if (!customProjectName.trim() || !newProjectName.trim()) {
+      return;
+    }
+
+    onDirectNew(
+      customProjectName.trim(),
+      newProjectName.trim(),
+      selectedTemplate,
+      [...templateQuestions[selectedTemplate]],
+      targetType,
+      targetCode,
+      true,
+    );
     setShowDirectNewModal(false);
-    setModalStep(1);
     setCustomProjectName("");
     setNewProjectName("");
     setTargetType("company");
     setTargetCode("");
-    setEnableAI(true);
   };
 
   const projects = [
@@ -748,7 +790,6 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
           <div className="relative">
             <button
               onClick={() => {
-                setModalStep(1);
                 setShowDirectNewModal(true);
               }}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
@@ -779,16 +820,13 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
             >
               <div className="p-8 space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-gray-900">
-                    {modalStep === 1 ? "新建尽调项目" : "编辑基础问题集合"}
-                  </h3>
+                  <h3 className="text-xl font-bold text-gray-900">新建尽调项目</h3>
                   <button onClick={() => setShowDirectNewModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                     <X size={20} className="text-gray-400" />
                   </button>
                 </div>
 
-                {modalStep === 1 ? (
-                  <motion.div key="step1" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="space-y-6">
+                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="space-y-6">
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 ml-1">
@@ -855,20 +893,6 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-2xl border border-blue-100 group cursor-pointer transition-all hover:shadow-sm" onClick={() => setEnableAI(!enableAI)}>
-                      <div>
-                        <div className="text-sm font-bold text-gray-900">同步开启全网 AI 搜索</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">自动搜集公开涉诉、财务预警并生成针对性补充提纲</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEnableAI(!enableAI); }}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${enableAI ? 'bg-blue-600' : 'bg-gray-200'}`}
-                      >
-                        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${enableAI ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </button>
-                    </div>
-
                     <div className="flex gap-3 pt-4 border-t border-gray-100">
                       <button
                         onClick={() => setShowDirectNewModal(false)}
@@ -877,82 +901,14 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
                         取消
                       </button>
                       <button
-                        onClick={handleNextStep}
-                        onMouseDown={handleNextStep}
+                        onClick={handleCreateProject}
                         disabled={!newProjectName.trim()}
                         className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md flex items-center justify-center gap-2 text-sm"
                       >
-                        下一步：编辑问题 <ArrowRight size={16} />
+                        新建 <ArrowRight size={16} />
                       </button>
                     </div>
-                  </motion.div>
-                ) : (
-                  <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }} className="space-y-4">
-                    <p className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                      已加载 <strong>{templates.find(t => t.id === selectedTemplate)?.title}</strong> 的预设访谈问题。系统在创建后还将自动开启后台 AI 全网检索分析并给您推送补充问题。
-                    </p>
-
-                    <div className="max-h-60 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                      {editingQuestions.map((q, idx) => (
-                        <div key={idx} className="bg-white border text-sm border-gray-100 p-3 rounded-xl flex items-start gap-3 group relative">
-                          <div className="text-blue-600 mt-0.5"><MessageSquare size={16} /></div>
-                          <div className="flex-1">
-                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full mr-2">{q.category}</span>
-                            <span className="text-gray-800">{q.question}</span>
-                          </div>
-                          <button
-                            onClick={() => setEditingQuestions(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex gap-2 items-center pt-2">
-                      <input
-                        type="text"
-                        value={newQuestionText}
-                        onChange={e => setNewQuestionText(e.target.value)}
-                        placeholder="添加手动补充问题..."
-                        className="flex-1 py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && newQuestionText.trim()) {
-                            setEditingQuestions(prev => [...prev, { category: "自定义", question: newQuestionText.trim(), source: "手动", type: "manual" }]);
-                            setNewQuestionText("");
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          if (newQuestionText.trim()) {
-                            setEditingQuestions(prev => [...prev, { category: "自定义", question: newQuestionText.trim(), source: "手动", type: "manual" }]);
-                            setNewQuestionText("");
-                          }
-                        }}
-                        className="p-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700"
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-
-                    <div className="flex gap-3 pt-6 border-t border-gray-100">
-                      <button
-                        onClick={() => setModalStep(1)}
-                        className="py-3 px-6 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center gap-2 text-sm"
-                      >
-                        返回
-                      </button>
-                      <button
-                        onClick={handleCreateProject}
-                        className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-200 text-sm"
-                      >
-                        确认清单，创建项目
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
+                </motion.div>
               </div>
             </motion.div>
           </div>
@@ -1007,6 +963,7 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
     </div>
   );
 };
+
 
 // Dashboard View Component (Project Detail)
 const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult }: {
@@ -1131,6 +1088,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
   const [editValue, setEditValue] = useState("");
   const [newQuestionInput, setNewQuestionInput] = useState("");
   const [showManualAdd, setShowManualAdd] = useState(false);
+  const [textMaterial, setTextMaterial] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<{ category: string, question: string, source: string, type: string, selected: boolean }[]>([]);
 
   const handleConfirmAIQuestions = () => {
@@ -1173,134 +1131,150 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
 
   return (
     <>
-      <header className="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="cursor-pointer hover:text-blue-600" onClick={onBack}>尽调管理</span>
-          <ChevronRight size={14} />
-          <span className="text-gray-800 font-medium">{projectName} - 尽调详情</span>
+      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-8 py-4 backdrop-blur">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="cursor-pointer hover:text-blue-600" onClick={onBack}>尽调管理</span>
+              <ChevronRight size={14} />
+              <span className="text-gray-800 font-medium">{projectName} - 尽调详情</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <button className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50">
+              更换模板
+            </button>
+            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700">
+              重新生成
+            </button>
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+            >
+              <Edit3 size={16} />
+              <span>报告工作台</span>
+            </button>
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+            >
+              <Download size={16} />
+              <span>下载 DOCX</span>
+            </button>
+            <button className="flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100">
+              <ClipboardCheck size={16} />
+              <span>归档报告</span>
+            </button>
+            {false && (
+              <button className="rounded-xl border border-gray-200 p-2 text-gray-400 transition-colors hover:bg-gray-50">
+                <History size={18} />
+              </button>
+            )}
+          </div>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors">
-          <ClipboardCheck size={16} />
-          <span>归档报告</span>
-        </button>
       </header>
 
       <div className="p-8 space-y-8">
-        {/* DD Progress Flow */}
-        <section className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-800 mb-6">尽调流程</h2>
-          <div className="flex items-center gap-4">
-            <ProcessStep icon={FileText} title="收集企业资料" desc="快速上传或填基本信息" completed />
-            <div className="flex-1 h-px bg-gray-100" />
-            <ProcessStep icon={BrainCircuit} title="AI 智能分析" desc="自动分析识别访谈重点" completed />
-            <div className="flex-1 h-px bg-gray-100" />
-            <ProcessStep icon={Mic} title="进行现场访谈" desc="高效访谈实时记录完整信息" active />
-            <div className="flex-1 h-px bg-gray-100" />
-            <ProcessStep icon={FileSpreadsheet} title="生成专业报告" desc="自动整合内容生成报告" />
-          </div>
-        </section>
-
-        {/* AI Intelligence Pre-check Results Summary / Entry Point */}
-        <section className="grid grid-cols-1 gap-6">
-          <div className={`transition-all relative overflow-hidden ${(intelligenceResult && !intelligenceResult.isSkip && !intelligenceResult.isPending)
-            ? 'p-6 rounded-2xl shadow-sm border bg-white border-blue-100'
-            : (isBackgroundAnalyzing || (intelligenceResult && intelligenceResult.isPending))
-              ? 'rounded-2xl border-2 border-blue-400 border-opacity-50 shadow-md shadow-blue-100/50 bg-gradient-to-r from-blue-50/80 to-indigo-50/80'
-              : 'p-6 rounded-2xl shadow-sm border bg-white border-dashed border-blue-200'
-            }`}>
-            {isBackgroundAnalyzing || (intelligenceResult && intelligenceResult.isPending) ? (
-              <div className="p-6 relative">
-                {/* 扫描光效 */}
-                <motion.div
-                  initial={{ x: "-100%" }}
-                  animate={{ x: "200%" }}
-                  transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent -skew-x-12 z-0"
-                />
-                <div className="flex items-center justify-between relative z-10">
-                  <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 bg-white shadow-sm rounded-[1rem] flex items-center justify-center text-blue-600 relative shrink-0">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                        className="absolute inset-0 border-[3px] border-blue-100 border-t-blue-600 rounded-[1rem]"
-                      />
-                      <BrainCircuit size={28} className="animate-pulse drop-shadow-sm" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-black bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent mb-1">
-                        AI 后台智能分析中
-                      </h2>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-blue-900/60 text-sm font-medium">正在调取全网检索接口，执行深度隐患筛查，此过程不影响您当前的操作</p>
-                        <span className="flex gap-1 ml-1">
-                          <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                          <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                          <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                        </span>
+        {/* AI 智能分析模块恢复展示 */}
+        {true && (
+          <>
+            <section className="grid grid-cols-1 gap-6">
+              <div className={`transition-all relative overflow-hidden ${(intelligenceResult && !intelligenceResult.isSkip && !intelligenceResult.isPending)
+                ? 'p-6 rounded-2xl shadow-sm border bg-white border-blue-100'
+                : (isBackgroundAnalyzing || (intelligenceResult && intelligenceResult.isPending))
+                  ? 'rounded-2xl border-2 border-blue-400 border-opacity-50 shadow-md shadow-blue-100/50 bg-gradient-to-r from-blue-50/80 to-indigo-50/80'
+                  : 'p-6 rounded-2xl shadow-sm border bg-white border-dashed border-blue-200'
+                }`}>
+                {isBackgroundAnalyzing || (intelligenceResult && intelligenceResult.isPending) ? (
+                  <div className="p-6 relative">
+                    <motion.div
+                      initial={{ x: "-100%" }}
+                      animate={{ x: "200%" }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent -skew-x-12 z-0"
+                    />
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-white shadow-sm rounded-[1rem] flex items-center justify-center text-blue-600 relative shrink-0">
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-0 border-[3px] border-blue-100 border-t-blue-600 rounded-[1rem]"
+                          />
+                          <BrainCircuit size={28} className="animate-pulse drop-shadow-sm" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-black bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent mb-1">
+                            AI 后台智能分析中
+                          </h2>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-blue-900/60 text-sm font-medium">正在调取全网检索接口，执行深度隐患筛查，此过程不影响您当前的操作</p>
+                            <span className="flex gap-1 ml-1">
+                              <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                              <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                              <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }} className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                ) : (intelligenceResult && !intelligenceResult.isSkip) ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                        <BrainCircuit size={24} />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-gray-800">AI 智能分析已完成</h2>
+                        <p className="text-gray-500 text-xs mt-0.5">识别出 {intelligenceResult.companyData?.financialAnomalies?.length || 0} 项财务异常与 {intelligenceResult.companyData?.litigation?.count || 0} 条法律风险</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          if (intelligenceResult?.aiQuestions && pendingQuestions.length === 0) {
+                            setPendingQuestions(intelligenceResult.aiQuestions.map((q: any) => ({ ...q, selected: true })));
+                          }
+                          setShowIntelligenceModal(true);
+                        }}
+                        className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2"
+                      >
+                        <Layout size={16} />
+                        <span>查看分析结果</span>
+                      </button>
+                      <button
+                        onClick={() => setShowConfirmModal(true)}
+                        className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-gray-100"
+                        title="重新分析"
+                      >
+                        <RefreshCw size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+                        <BrainCircuit size={24} />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-gray-800">AI 智能分析</h2>
+                        <p className="text-gray-400 text-xs mt-0.5">全网数据深度抓取，精准识别访谈重点</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowConfirmModal(true)}
+                      className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-100 flex items-center gap-2"
+                    >
+                      <Zap size={16} />
+                      开启分析
+                    </button>
+                  </div>
+                )}
               </div>
-            ) : (intelligenceResult && !intelligenceResult.isSkip) ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
-                    <BrainCircuit size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-gray-800">AI 智能分析已完成</h2>
-                    <p className="text-gray-500 text-xs mt-0.5">识别出 {intelligenceResult.companyData?.financialAnomalies?.length || 0} 项财务异常与 {intelligenceResult.companyData?.litigation?.count || 0} 条法律风险</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (intelligenceResult?.aiQuestions && pendingQuestions.length === 0) {
-                        setPendingQuestions(intelligenceResult.aiQuestions.map((q: any) => ({ ...q, selected: true })));
-                      }
-                      setShowIntelligenceModal(true);
-                    }}
-                    className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2"
-                  >
-                    <Layout size={16} />
-                    <span>查看分析结果</span>
-                  </button>
-                  <button
-                    onClick={() => setShowConfirmModal(true)}
-                    className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-gray-100"
-                    title="重新分析"
-                  >
-                    <RefreshCw size={18} />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-                    <BrainCircuit size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-gray-800">AI 智能分析</h2>
-                    <p className="text-gray-400 text-xs mt-0.5">全网数据深度抓取，精准识别访谈重点</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowConfirmModal(true)}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-100 flex items-center gap-2"
-                >
-                  <Zap size={16} />
-                  开启分析
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
+            </section>
 
-        {/* Intelligence Result Modal */}
-        {showIntelligenceModal && intelligenceResult && (
+            {showIntelligenceModal && intelligenceResult && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1415,54 +1389,6 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                         </div>
                       </div>
 
-                      {/* AI Questions Preview - Integrated into Data Tab */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <MessageSquare size={20} className="text-blue-600" />
-                            分析识别访谈重点
-                          </h3>
-                          <button
-                            onClick={() => setModalActiveTab("questions")}
-                            className="text-xs font-bold text-blue-600 hover:underline"
-                          >
-                            管理全部问题
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {pendingQuestions.slice(0, 4).map((q, idx) => (
-                            <div key={idx} className="p-4 bg-white border border-gray-100 rounded-2xl flex items-start gap-3 shadow-sm">
-                              <div className="w-6 h-6 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0">
-                                {idx + 1}
-                              </div>
-                              <div className="space-y-1">
-                                <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{q.category}</span>
-                                <p className="text-sm font-medium text-gray-700 leading-relaxed line-clamp-2">{q.question}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* AI Guidelines Preview */}
-                      <div className="bg-blue-600 p-8 rounded-[2rem] text-white space-y-4 shadow-xl shadow-blue-100">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-white/20 rounded-xl">
-                            <Lightbulb size={24} />
-                          </div>
-                          <h4 className="text-lg font-bold">AI 尽调深度建议</h4>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {intelligenceResult.guidelines?.map((g: any, idx: number) => (
-                            <span key={idx} className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold border border-white/30">
-                              {g.tag}: {g.preference}
-                            </span>
-                          ))}
-                        </div>
-                        <p className="text-sm text-blue-50 leading-relaxed font-medium">
-                          该企业属于“高新企业”范畴，符合机构优先支持导向。但需重点关注“环保违规”及“应收账款异常”风险。建议在访谈中详细核实环保整改落实情况及应收账款回款计划，并评估其对持续经营能力的影响。
-                        </p>
-                      </div>
                     </div>
                   )}
 
@@ -1508,7 +1434,6 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                                 <div className="flex items-center gap-2">
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${q.selected ? 'bg-blue-200 text-blue-800' : 'bg-blue-50 text-blue-600'
                                     }`}>{q.category}</span>
-                                  <span className="text-[10px] text-gray-400 font-medium">来源: {q.source}</span>
                                 </div>
                                 <p className={`text-base font-semibold leading-relaxed transition-colors ${q.selected ? 'text-blue-900' : 'text-gray-700'
                                   }`}>{q.question}</p>
@@ -1553,125 +1478,27 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
               </div>
             </motion.div>
           </div>
+            )}
+          </>
         )}
-
-        {/* Project Summary */}
-        <section className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-start gap-8">
-          <div className="w-20 h-20 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 shadow-inner">
-            <ClipboardCheck size={40} />
-          </div>
-          <div className="flex-1 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-800">{projectName}流贷尽调</h1>
-                <PenTool size={16} className="text-gray-400 cursor-pointer hover:text-blue-600" />
-                <button className="px-3 py-1 border border-blue-200 text-blue-600 rounded text-xs font-medium hover:bg-blue-50">更换模板</button>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">重新生成</button>
-                <button
-                  onClick={onEdit}
-                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Edit3 size={16} />
-                  <span>修改报告</span>
-                </button>
-                <button
-                  onClick={onAudit}
-                  className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 flex items-center gap-2"
-                >
-                  <ClipboardCheck size={16} />
-                  <span>报告核查</span>
-                </button>
-                <button
-                  onClick={onDownload}
-                  className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 flex items-center gap-2"
-                >
-                  <Download size={16} />
-                  <span>下载 DOCX</span>
-                </button>
-                <button className="p-2 border border-gray-200 text-gray-400 rounded-lg hover:bg-gray-50"><History size={18} /></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-4 text-xs text-gray-500">
-              <div className="flex items-center gap-2"><Clock size={14} /> 最后修改时间: 2025-03-03 13:03:06</div>
-              <div className="flex items-center gap-2"><FileIcon size={14} /> 生成模板: 银行金融尽调报告模板</div>
-              <div className="flex items-center gap-2"><FileText size={14} /> 报告字数: 18026字</div>
-              <div className="flex items-center gap-2"><User size={14} /> 报告所有人: 张浩然</div>
-            </div>
-          </div>
-        </section>
 
         {/* Materials Sections */}
         <div className="space-y-8">
-          {/* 1. 企业基本情况 */}
+          <DocumentClassificationSection sectionNumber={1} title="文档资料" />
+          
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                1. 企业基本情况
+                2. 文本资料
               </h2>
-              <div className="flex items-center gap-2">
-                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Settings size={18} /></button>
-              </div>
             </div>
-            <div className="grid grid-cols-3 gap-6">
-              <MaterialCard
-                title="企业介绍"
-                status="completed"
-                date="2025-03-03 10:20"
-                icon={Briefcase}
-                onClick={onOpenModal}
-              />
-              <MaterialCard
-                title="产品与服务"
-                status="completed"
-                date="2025-03-03 10:25"
-                icon={Package}
-                onClick={onOpenModal}
-              />
-              <MaterialCard
-                title="市场地位"
-                status="completed"
-                date="2025-03-03 10:30"
-                icon={TrendingUp}
-                onClick={onOpenModal}
-              />
-            </div>
-          </section>
-
-          {/* 2. 财务状况分析 */}
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                2. 财务状况分析
-              </h2>
-              <div className="flex items-center gap-2">
-                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Settings size={18} /></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-6">
-              <MaterialCard
-                title="资产负债表分析"
-                status="completed"
-                date="2025-03-03 11:05"
-                icon={PieChart}
-                onClick={onOpenModal}
-              />
-              <MaterialCard
-                title="利润表分析"
-                status="completed"
-                date="2025-03-03 11:15"
-                icon={BarChart3}
-                onClick={onOpenModal}
-              />
-              <MaterialCard
-                title="现金流量表分析"
-                status="completed"
-                date="2025-03-03 11:20"
-                icon={LineChart}
-                onClick={onOpenModal}
+            <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+              <textarea
+                value={textMaterial}
+                onChange={(event) => setTextMaterial(event.target.value)}
+                placeholder="请输入需要补充的文本资料内容..."
+                className="min-h-[220px] w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-7 text-gray-700 outline-none transition focus:border-blue-500 focus:bg-white"
               />
             </div>
           </section>
@@ -1850,9 +1677,10 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
             </div>
           </section>
         </div>
-        {/* Intelligence Confirm Modal */}
-        <AnimatePresence>
-          {showConfirmModal && (
+        {/* AI 智能分析确认弹窗恢复展示 */}
+        {true && (
+          <AnimatePresence>
+            {showConfirmModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <motion.div
                 initial={{ opacity: 0 }}
@@ -1911,8 +1739,9 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                 </div>
               </motion.div>
             </div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
+        )}
 
         {/* Internal Analysis Loading Modal */}
         <AnimatePresence>
@@ -2959,6 +2788,81 @@ const DocxToolbar = () => (
   </div>
 );
 
+type MaterialPreviewData = {
+  title: string;
+  section: string;
+  source: string;
+  excerpt: string;
+  targetId: string;
+  tab: "conflict" | "traceability";
+};
+
+const MaterialPreviewDialog = ({
+  preview,
+  onClose,
+  onLocate,
+}: {
+  preview: MaterialPreviewData | null;
+  onClose: () => void;
+  onLocate: (targetId: string, tab: "conflict" | "traceability") => void;
+}) => {
+  if (!preview) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-6">
+      <div className="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+          <div className="space-y-1">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-500">原始素材</p>
+            <h3 className="text-xl font-bold text-gray-900">{preview.title}</h3>
+            <p className="text-sm text-gray-500">{preview.section}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-5 px-6 py-6">
+          <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-blue-600">素材来源</div>
+            <p className="mt-2 text-sm leading-6 text-gray-700">{preview.source}</p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">原文摘录</div>
+            <p className="mt-3 text-sm leading-7 text-gray-700">{preview.excerpt}</p>
+          </div>
+
+        </div>
+
+        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            关闭
+          </button>
+          <button
+            onClick={() => {
+              onLocate(preview.targetId, preview.tab);
+              onClose();
+            }}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            <ArrowRight size={16} />
+            <span>定位到正文</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelligenceResult }: {
   onBack: () => void,
   onDownloadConflict: () => void,
@@ -2967,18 +2871,178 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
 }) => {
   const projectName = intelligenceResult?.companyName || "A公司";
   const [activeTab, setActiveTab] = useState<"conflict" | "traceability">("conflict");
+  const auditTargetRefs = useRef<Record<string, HTMLParagraphElement | null>>({});
+  const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
+  const [materialPreview, setMaterialPreview] = useState<MaterialPreviewData | null>(null);
+  const [auditSections, setAuditSections] = useState([
+    {
+      id: "company",
+      title: "企业基本情况",
+      paragraphs: [
+        `${projectName}成立于2010年，总部位于上海市张江高科技园区。公司是一家专注于工业自动化设备研发、生产及销售的高新技术企业。`,
+        "截至2024年底，公司注册资本为人民币5000万元。截至2024年底，公司实现营业收入约1.2亿元。公司主要产品涵盖智能组装线、精密检测设备以及工业机器人集成系统。",
+      ],
+    },
+    {
+      id: "financial",
+      title: "财务状况分析",
+      paragraphs: [
+        "2024年实现营业收入1.2亿元，净利润1500万元。公司整体财务表现稳健。",
+        "在还款来源方面，公司计划通过销售回款完全覆盖本次贷款本息。",
+      ],
+    },
+    {
+      id: "interview",
+      title: "访谈核心观点",
+      paragraphs: [
+        "受访人表示，公司未来三年将重点布局新能源汽车零部件市场，并同步推进区域客户结构优化。",
+        "访谈记录显示，公司近一年无重大股权变动，股东结构整体保持稳定。",
+      ],
+    },
+  ]);
 
   const conflicts = [
-    { id: 1, type: "数据不一致", field: "2024年营业收入", sourceA: "财务报表 (1.2亿)", sourceB: "访谈记录 (1.5亿)", severity: "high", page: 1 },
-    { id: 2, type: "逻辑冲突", field: "还款计划", sourceA: "销售回款覆盖", sourceB: "抵押物变现", severity: "medium", page: 1 },
-    { id: 3, type: "信息缺失", field: "股权变动", sourceA: "工商信息 (有变动)", sourceB: "访谈记录 (无变动)", severity: "high", page: 2 },
+    {
+      id: 1,
+      type: "数据不一致",
+      field: "2024年营业收入",
+      page: 1,
+      targetId: "audit-company-revenue",
+      sources: [
+        { id: "report", label: "报告内容", content: "财务报表 (1.2亿)", tone: "neutral" },
+        { id: "interview", label: "访谈记录", content: "管理层访谈 (1.5亿)", tone: "warning", resolvedText: "截至2024年底，公司实现营业收入约1.5亿元。" },
+        { id: "ledger", label: "销售台账", content: "销售台账汇总 (1.38亿)", tone: "warning", resolvedText: "截至2024年底，公司实现营业收入约1.38亿元。" },
+      ],
+    },
+    {
+      id: 2,
+      type: "逻辑冲突",
+      field: "还款计划",
+      page: 1,
+      targetId: "audit-industry-repayment",
+      sources: [
+        { id: "report", label: "报告内容", content: "销售回款覆盖", tone: "neutral" },
+        { id: "pledge", label: "抵押方案", content: "抵押物变现", tone: "warning", resolvedText: "在还款来源方面，公司计划通过抵押物变现覆盖本次贷款本息。" },
+        { id: "meeting", label: "会议纪要", content: "销售回款 + 股东增信联合覆盖", tone: "warning", resolvedText: "在还款来源方面，公司计划通过销售回款与股东增信联合覆盖本次贷款本息。" },
+      ],
+    },
+    {
+      id: 3,
+      type: "信息缺失",
+      field: "股权变动",
+      page: 2,
+      targetId: "audit-interview-equity",
+      sources: [
+        { id: "report", label: "报告内容", content: "访谈记录 (无变动)", tone: "neutral" },
+        { id: "registry", label: "工商信息", content: "工商信息 (有变动)", tone: "warning", resolvedText: "访谈记录显示，公司近一年存在股权变动，股东结构发生调整。" },
+      ],
+    },
   ];
 
   const traces = [
-    { id: 1, section: "第一章：企业基本情况", content: `${projectName}成立于2010年，主要从事工业自动化设备的研发与生产...`, source: "工商登记信息 / 官方网站", confidence: 0.98 },
-    { id: 2, section: "第二章：财务状况分析", content: "2024年实现营业收入1.2亿元，净利润1500万元，同比增长12%...", source: `${projectName}2024年财务报表.pdf (第12页)`, confidence: 1.0 },
-    { id: 3, section: "第三章：访谈核心观点", content: "受访人表示，公司未来三年将重点布局新能源汽车零部件市场...", source: "访谈录音 (02:55 - 03:45)", confidence: 0.92 },
+    {
+      id: 1,
+      section: "第一章：企业基本情况",
+      content: `${projectName}成立于2010年，主要从事工业自动化设备的研发与生产...`,
+      source: "工商登记信息 / 官方网站",
+      confidence: 0.98,
+      targetId: "audit-company-overview",
+      materialTitle: `${projectName}工商登记与官网摘要`,
+      materialExcerpt: `${projectName}成立于2010年，注册地位于上海市张江高科技园区，经营范围包括工业自动化设备研发、生产、销售与技术服务。官网公开材料显示，公司已形成智能组装线、精密检测设备及工业机器人集成三类核心产品线。`,
+    },
+    {
+      id: 2,
+      section: "第二章：财务状况分析",
+      content: "2024年实现营业收入1.2亿元，净利润1500万元，同比增长12%...",
+      source: `${projectName}2024年财务报表.pdf (第12页)`,
+      confidence: 1.0,
+      targetId: "audit-industry-financials",
+      materialTitle: `${projectName}2024年财务报表摘录`,
+      materialExcerpt: "2024年度公司实现营业收入120,000,000元，净利润15,000,000元，经营活动现金流保持净流入。主营业务毛利率较上年基本稳定，应收账款余额同比增长但仍处于可控区间。",
+    },
+    {
+      id: 3,
+      section: "第三章：访谈核心观点",
+      content: "受访人表示，公司未来三年将重点布局新能源汽车零部件市场...",
+      source: "访谈录音 (02:55 - 03:45)",
+      confidence: 0.92,
+      targetId: "audit-interview-outlook",
+      materialTitle: "管理层访谈录音转写",
+      materialExcerpt: "受访管理层表示，未来三年公司将重点布局新能源汽车零部件市场，并围绕核心客户推进区域交付网络建设。同时会逐步优化客户结构，提升高毛利项目的占比。",
+    },
   ];
+
+  const registerAuditTarget = (targetId: string) => (node: HTMLParagraphElement | null) => {
+    auditTargetRefs.current[targetId] = node;
+  };
+
+  const jumpToAuditTarget = (targetId: string, tab: "conflict" | "traceability") => {
+    setActiveTab(tab);
+    setActiveTargetId(targetId);
+
+    window.requestAnimationFrame(() => {
+      auditTargetRefs.current[targetId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  };
+
+  const applyAuditConflictSource = (targetId: string, resolvedText?: string) => {
+    if (!resolvedText) {
+      jumpToAuditTarget(targetId, "conflict");
+      return;
+    }
+
+    const paragraphMap: Record<string, { sectionId: string; index: number }> = {
+      "audit-company-revenue": { sectionId: "company", index: 1 },
+      "audit-industry-repayment": { sectionId: "financial", index: 1 },
+      "audit-interview-equity": { sectionId: "interview", index: 1 },
+    };
+
+    const target = paragraphMap[targetId];
+    if (!target) {
+      return;
+    }
+
+    setAuditSections((previous) =>
+      previous.map((section) =>
+        section.id === target.sectionId
+          ? {
+              ...section,
+              paragraphs: section.paragraphs.map((paragraph, index) =>
+                index === target.index ? resolvedText : paragraph,
+              ),
+            }
+          : section,
+      ),
+    );
+
+    jumpToAuditTarget(targetId, "conflict");
+  };
+
+  const renderAuditParagraph = (targetId: string, tab: "conflict" | "traceability", highlightText: string, text: string) => {
+    if (activeTab !== tab || !text.includes(highlightText)) {
+      return text;
+    }
+
+    const start = text.indexOf(highlightText);
+    const before = text.slice(0, start);
+    const middle = text.slice(start, start + highlightText.length);
+    const after = text.slice(start + highlightText.length);
+    const highlightClass =
+      tab === "conflict"
+        ? "bg-orange-100 border-b-2 border-orange-400 cursor-help px-1"
+        : "bg-purple-50 border-b-2 border-purple-300 cursor-help px-1";
+
+    return (
+      <>
+        {before}
+        <span className={highlightClass}>{middle}</span>
+        {after}
+      </>
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-gray-100 h-screen overflow-hidden">
@@ -2997,16 +3061,7 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={activeTab === "conflict" ? onDownloadConflict : onDownloadTraceability}
-            className={`px-4 py-2 text-white rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg transition-all active:scale-95 ${activeTab === "conflict" ? "bg-orange-600 shadow-orange-200 hover:bg-orange-700" : "bg-purple-600 shadow-purple-200 hover:bg-purple-700"
-              }`}
-          >
-            <Download size={16} />
-            <span>导出{activeTab === "conflict" ? "冲突" : "溯源"}报告核查</span>
-          </button>
-        </div>
+        <div />
       </header>
 
       <div className="flex-1 flex overflow-hidden">
@@ -3014,34 +3069,45 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
         <div className="flex-1 overflow-y-auto p-8 bg-gray-200/50 flex flex-col items-center border-r border-gray-300">
           <div className="w-[700px] bg-white shadow-xl border border-gray-300 min-h-[1000px] p-[60px] space-y-6 relative mb-8">
             <h1 className="text-2xl font-bold text-center text-gray-900 mb-8 font-serif">{projectName}流贷尽调报告 (草案)</h1>
-            <section className="space-y-4">
-              <h2 className="text-lg font-bold text-gray-800 border-b border-gray-800 pb-1 font-serif">1. 企业基本情况</h2>
-              <p className="text-gray-700 leading-relaxed text-sm text-justify indent-8 relative group">
-                <span className={activeTab === 'traceability' ? "bg-purple-50 border-b-2 border-purple-300 cursor-help px-1" : ""}>
-                  {projectName}成立于2010年，总部位于上海市张江高科技园区。
-                </span>
-                公司是一家专注于工业自动化设备研发、生产及销售的高新技术企业。
-                <span className={activeTab === 'conflict' ? "bg-orange-100 border-b-2 border-orange-400 cursor-help px-1" : ""}>
-                  截至2024年底，公司实现营业收入约1.2亿元
-                </span>。
-              </p>
-            </section>
-            <section className="space-y-4 mt-8">
-              <h2 className="text-lg font-bold text-gray-800 border-b border-gray-800 pb-1 font-serif">2. 财务状况分析</h2>
-              <p className="text-gray-700 leading-relaxed text-sm text-justify indent-8 relative group">
-                <span className={activeTab === 'traceability' ? "bg-purple-50 border-b-2 border-purple-300 cursor-help px-1" : ""}>
-                  2024年实现营业收入1.2亿元，净利润1500万元
-                </span>。
-                公司整体财务表现稳健。
-              </p>
-              <p className="text-gray-700 leading-relaxed text-sm text-justify indent-8 relative group">
-                在还款来源方面，公司计划通过
-                <span className={activeTab === 'conflict' ? "bg-orange-100 border-b-2 border-orange-400 cursor-help px-1" : ""}>
-                  销售回款完全覆盖
-                </span>
-                本次贷款本息。
-              </p>
-            </section>
+            {auditSections.map((section, sectionIndex) => (
+              <section key={section.id} className={`space-y-4 ${sectionIndex > 0 ? "mt-8" : ""}`}>
+                <h2 className="text-lg font-bold text-gray-800 border-b border-gray-800 pb-1 font-serif">
+                  {sectionIndex + 1}. {section.title}
+                </h2>
+                {section.paragraphs.map((paragraph, paragraphIndex) => {
+                  const targetId = `audit-${section.id}-${paragraphIndex === 0 ? section.id === "company" ? "overview" : section.id === "financial" ? "financials" : "outlook" : section.id === "company" ? "revenue" : section.id === "financial" ? "repayment" : "equity"}`;
+
+                  const paragraphContent =
+                    targetId === "audit-company-overview"
+                      ? renderAuditParagraph(targetId, "traceability", `${projectName}成立于2010年，总部位于上海市张江高科技园区。`, paragraph)
+                      : targetId === "audit-company-revenue"
+                        ? renderAuditParagraph(targetId, "conflict", "截至2024年底，公司实现营业收入约1.2亿元", paragraph)
+                        : targetId === "audit-industry-financials"
+                          ? renderAuditParagraph(targetId, "traceability", "2024年实现营业收入1.2亿元，净利润1500万元", paragraph)
+                          : targetId === "audit-industry-repayment"
+                            ? renderAuditParagraph(targetId, "conflict", "销售回款完全覆盖", paragraph)
+                            : targetId === "audit-interview-outlook"
+                              ? renderAuditParagraph(targetId, "traceability", "公司未来三年将重点布局新能源汽车零部件市场", paragraph)
+                              : renderAuditParagraph(targetId, "conflict", "无重大股权变动", paragraph);
+
+                  return (
+                    <p
+                      key={targetId}
+                      ref={registerAuditTarget(targetId)}
+                      className={`text-gray-700 leading-relaxed text-sm text-justify indent-8 relative group scroll-mt-24 ${
+                        activeTargetId === targetId
+                          ? activeTab === "conflict"
+                            ? "rounded-xl ring-2 ring-amber-300 ring-offset-4 ring-offset-white"
+                            : "rounded-xl ring-2 ring-fuchsia-300 ring-offset-4 ring-offset-white"
+                          : ""
+                      }`}
+                    >
+                      {paragraphContent}
+                    </p>
+                  );
+                })}
+              </section>
+            ))}
             <div className="absolute bottom-4 right-8 text-[10px] text-gray-300">Page 1</div>
           </div>
         </div>
@@ -3076,26 +3142,50 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
                   <span className="text-[10px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded">AI 自动检测</span>
                 </div>
                 {conflicts.map((c, idx) => (
-                  <div key={c.id} className="border border-gray-100 rounded-xl p-5 hover:border-orange-300 transition-all bg-white shadow-sm hover:shadow-md">
+                  <div
+                    key={c.id}
+                    onClick={() => jumpToAuditTarget(c.targetId, "conflict")}
+                    className="cursor-pointer border border-gray-100 rounded-xl p-5 hover:border-orange-300 transition-all bg-white shadow-sm hover:shadow-md"
+                  >
                     <div className="flex items-center justify-between mb-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.severity === 'high' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
-                        {c.severity === 'high' ? '高风险' : '中风险'}
-                      </span>
                       <span className="text-[10px] text-gray-400 font-mono">#{idx + 1}</span>
                     </div>
                     <h4 className="font-bold text-gray-800 text-sm mb-4">{c.type}: {c.field}</h4>
                     <div className="space-y-3">
-                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative">
-                        <span className="absolute -top-2 left-3 bg-white px-1 text-[9px] font-bold text-gray-400 border border-gray-100 rounded">来源 A (报告)</span>
-                        <p className="text-xs text-gray-600 italic">"{c.sourceA}"</p>
-                      </div>
-                      <div className="p-3 bg-orange-50/50 rounded-lg border border-orange-100 relative">
-                        <span className="absolute -top-2 left-3 bg-white px-1 text-[9px] font-bold text-orange-400 border border-orange-100 rounded">来源 B (比对)</span>
-                        <p className="text-xs text-gray-700 italic font-medium">"{c.sourceB}"</p>
-                      </div>
+                      {c.sources.map((source) => (
+                        <div
+                          key={source.id}
+                          className={`rounded-lg border p-3 ${
+                            source.tone === 'warning'
+                              ? 'border-orange-100 bg-orange-50/60'
+                              : 'border-gray-100 bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className={`text-[10px] font-bold ${
+                              source.tone === 'warning' ? 'text-orange-500' : 'text-gray-400'
+                            }`}>
+                              {source.label}
+                            </span>
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                applyAuditConflictSource(c.targetId, source.resolvedText);
+                              }}
+                              className="text-[10px] font-bold text-blue-600 hover:underline"
+                            >
+                              采纳
+                            </button>
+                          </div>
+                          <p className={`mt-2 text-xs italic ${
+                            source.tone === 'warning' ? 'text-gray-700 font-medium' : 'text-gray-600'
+                          }`}>
+                            "{source.content}"
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                      <button className="text-[10px] text-blue-600 font-bold hover:underline">采纳来源 B 并修改</button>
+                    <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-end">
                       <button className="text-[10px] text-gray-400 hover:text-gray-600">忽略此冲突</button>
                     </div>
                   </div>
@@ -3108,7 +3198,11 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
                   <span className="text-[10px] text-purple-600 font-bold bg-purple-50 px-2 py-0.5 rounded">AI 自动关联</span>
                 </div>
                 {traces.map(t => (
-                  <div key={t.id} className="space-y-4 group">
+                  <div
+                    key={t.id}
+                    onClick={() => jumpToAuditTarget(t.targetId, "traceability")}
+                    className="space-y-4 group cursor-pointer"
+                  >
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-purple-600 uppercase tracking-wider">{t.section}</h4>
                       <div className="flex items-center gap-1.5">
@@ -3123,7 +3217,20 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
                         <span className="text-[10px] font-bold text-gray-700">出处：<span className="text-blue-600">{t.source}</span></span>
                       </div>
                     </div>
-                    <button className="w-full py-2 text-[10px] font-bold text-blue-600 border border-blue-100 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMaterialPreview({
+                          title: t.materialTitle,
+                          section: t.section,
+                          source: t.source,
+                          excerpt: t.materialExcerpt,
+                          targetId: t.targetId,
+                          tab: "traceability",
+                        });
+                      }}
+                      className="w-full py-2 text-[10px] font-bold text-blue-600 border border-blue-100 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                    >
                       <span>查看原始素材</span>
                       <ArrowRight size={12} />
                     </button>
@@ -3134,15 +3241,347 @@ const AuditView = ({ onBack, onDownloadConflict, onDownloadTraceability, intelli
           </div>
         </div>
       </div>
+      <MaterialPreviewDialog
+        preview={materialPreview}
+        onClose={() => setMaterialPreview(null)}
+        onLocate={jumpToAuditTarget}
+      />
     </div>
   );
 };
 
-const EditReportView = ({ onBack, onDownload, intelligenceResult }: { onBack: () => void, onDownload: () => void, intelligenceResult?: any }) => {
+const EditReportView = ({
+  onBack,
+  onDownload,
+  onDownloadConflict,
+  onDownloadTraceability,
+  intelligenceResult,
+}: {
+  onBack: () => void,
+  onDownload: () => void,
+  onDownloadConflict: () => void,
+  onDownloadTraceability: () => void,
+  intelligenceResult?: any
+}) => {
   const projectName = intelligenceResult?.companyName || "A公司";
+  const [activeAuditTab, setActiveAuditTab] = useState<"conflict" | "traceability">("conflict");
+  const editTargetRefs = useRef<Record<string, HTMLElement | null>>({});
+  const [activeEditTargetId, setActiveEditTargetId] = useState<string | null>(null);
+  const [materialPreview, setMaterialPreview] = useState<MaterialPreviewData | null>(null);
+  const [reportSections, setReportSections] = useState([
+    {
+      id: "company",
+      title: "企业基本情况",
+      paragraphs: [
+        `${projectName}（以下简称“公司”）成立于2010年，总部位于上海市张江高科技园区。公司是一家专注于工业自动化设备研发、生产及销售的高新技术企业。经过十余年的发展，公司已在细分领域建立了较强的技术壁垒，拥有多项核心专利技术。`,
+        "截至2024年底，公司注册资本为人民币5000万元，员工总数超过300人，其中研发人员占比超过40%。公司实现营业收入约1.2亿元，公司主要产品涵盖智能组装线、精密检测设备以及工业机器人集成系统，广泛应用于电子制造、汽车零部件及新能源行业。",
+        "从股权结构看，控股股东及核心管理层保持稳定，经营团队对公司技术路线与重点客户资源具有较强控制力。近年来公司持续投入研发平台建设，在机器视觉、柔性产线集成及智能检测算法方面形成了较为完整的技术体系。",
+      ],
+    },
+    {
+      id: "industry",
+      title: "行业背景与地位",
+      paragraphs: [
+        "随着全球制造业向智能化、数字化转型，工业自动化行业迎来了快速增长期。国内政策持续支持“中国制造2025”，为本土自动化设备厂商提供了广阔的市场空间。",
+        "在行业竞争格局方面，头部企业向平台化、系统化方案延伸，中型厂商则更强调交付效率与细分场景能力。公司当前在华东区域装备制造客户中具备一定口碑优势，但在全国性项目获取、渠道覆盖与服务网络方面仍存在继续提升空间。",
+      ],
+    },
+    {
+      id: "financial",
+      title: "财务状况分析",
+      paragraphs: [
+        "2024年实现营业收入1.2亿元，净利润1500万元，公司整体财务表现保持稳健，现金流与订单储备处于可控区间。结合已获取财务资料，公司主营业务收入仍为设备销售与产线集成服务，两类收入贡献占比较高。",
+        "从资产质量看，应收账款规模随着业务扩张有所上升，部分项目回款周期受下游验收节奏影响而拉长。存货主要由在产品、原材料及部分备货设备构成，整体仍与项目制经营特点相匹配，但后续需持续关注大额项目交付与回款联动情况。",
+        "在还款来源安排上，公司预计通过销售回款完全覆盖本次贷款本息，同时辅以核心股东增信与设备抵押作为补充保障。该表述仍需结合访谈纪要、授信方案及财务测算进一步核验。",
+      ],
+    },
+    {
+      id: "operations",
+      title: "经营与交付情况",
+      paragraphs: [
+        "公司目前收入主要来源于汽车零部件、3C 电子及新能源装备客户，前五大客户贡献度相对较高，但客户合作年限整体较长，复购率处于合理水平。订单获取模式以销售跟进与行业口碑转介绍为主，大型项目通常伴随较长的商务谈判和验收周期。",
+        "从生产交付角度看，公司采用研发、装配、集成联动模式，关键零部件部分外采，核心调试与软件集成由内部团队完成。若未来订单规模进一步扩大，需要继续观察人员、产能与项目管理体系能否同步支撑。",
+      ],
+    },
+    {
+      id: "interview",
+      title: "访谈核心观点",
+      paragraphs: [
+        "受访人表示，公司未来三年将重点布局新能源汽车零部件市场，并同步推进区域客户结构优化。",
+        "访谈记录显示，公司近一年无重大股权变动，股东结构整体保持稳定。管理层同时强调，当前新增订单中来自新能源客户的占比正在上升，但尚需时间验证其利润率与回款质量能否持续稳定。",
+      ],
+    },
+    {
+      id: "risk",
+      title: "风险评估与建议",
+      paragraphs: [
+        "综合现有资料，公司核心风险主要集中在项目制业务带来的回款波动、订单集中度较高以及个别关键客户验收周期偏长等方面。若宏观制造业投资节奏放缓，可能对新增订单签约和交付回款产生一定影响。",
+        "建议在后续授信审查中，重点核查近 12 个月主要客户回款明细、在手订单履约进度、核心设备抵押落实情况以及股东增信安排的可执行性，并结合访谈内容进一步验证管理层对未来收入增长与现金流改善的判断依据。",
+      ],
+    },
+  ]);
+  const [isEditingDocument, setIsEditingDocument] = useState(false);
+  const [reportDraftSections, setReportDraftSections] = useState<
+    Array<{ id: string; title: string; paragraphs: string[] }>
+  >([]);
+
+  const conflicts = [
+    {
+      id: 1,
+      type: "数据不一致",
+      field: "2024年营业收入",
+      page: 1,
+      targetId: "edit-company-1",
+      sources: [
+        { id: "report", label: "报告内容", content: "财务报表 (1.2亿)", tone: "neutral" },
+        { id: "interview", label: "访谈记录", content: "管理层访谈 (1.5亿)", tone: "warning", resolvedText: "截至2024年底，公司实现营业收入约1.5亿元，公司主要产品涵盖智能组装线、精密检测设备以及工业机器人集成系统，广泛应用于电子制造、汽车零部件及新能源行业。" },
+        { id: "ledger", label: "销售台账", content: "销售台账汇总 (1.38亿)", tone: "warning", resolvedText: "截至2024年底，公司实现营业收入约1.38亿元，公司主要产品涵盖智能组装线、精密检测设备以及工业机器人集成系统，广泛应用于电子制造、汽车零部件及新能源行业。" },
+      ],
+    },
+    {
+      id: 2,
+      type: "逻辑冲突",
+      field: "还款计划",
+      page: 1,
+      targetId: "edit-financial-2",
+      sources: [
+        { id: "report", label: "报告内容", content: "销售回款覆盖", tone: "neutral" },
+        { id: "pledge", label: "抵押方案", content: "抵押物变现", tone: "warning", resolvedText: "在还款来源安排上，公司预计通过抵押物变现覆盖本次贷款本息，同时辅以核心股东增信与设备抵押作为补充保障。该表述仍需结合访谈纪要、授信方案及财务测算进一步核验。" },
+        { id: "meeting", label: "会议纪要", content: "销售回款 + 股东增信联合覆盖", tone: "warning", resolvedText: "在还款来源安排上，公司预计通过销售回款与股东增信联合覆盖本次贷款本息，同时辅以设备抵押作为补充保障。该表述仍需结合访谈纪要、授信方案及财务测算进一步核验。" },
+      ],
+    },
+    {
+      id: 3,
+      type: "信息缺失",
+      field: "股权变动",
+      page: 2,
+      targetId: "edit-interview-1",
+      sources: [
+        { id: "report", label: "报告内容", content: "访谈记录 (无变动)", tone: "neutral" },
+        { id: "registry", label: "工商信息", content: "工商信息 (有变动)", tone: "warning", resolvedText: "访谈记录显示，公司近一年存在股权变动，股东结构发生调整。管理层同时强调，当前新增订单中来自新能源客户的占比正在上升，但尚需时间验证其利润率与回款质量能否持续稳定。" },
+      ],
+    },
+  ];
+
+  const traces = [
+    {
+      id: 1,
+      section: "第一章：企业基本情况",
+      content: `${projectName}成立于2010年，主要从事工业自动化设备的研发与生产...`,
+      source: "工商登记信息 / 官方网站",
+      confidence: 0.98,
+      targetId: "edit-company-0",
+      materialTitle: `${projectName}工商登记与官网摘要`,
+      materialExcerpt: `${projectName}成立于2010年，注册地位于上海市张江高科技园区，经营范围包括工业自动化设备研发、生产、销售与技术服务。官网公开材料显示，公司已形成智能组装线、精密检测设备及工业机器人集成三类核心产品线。`,
+    },
+    {
+      id: 2,
+      section: "第三章：财务状况分析",
+      content: "2024年实现营业收入1.2亿元，净利润1500万元，同比增长12%...",
+      source: `${projectName}2024年财务报表.pdf (第12页)`,
+      confidence: 1.0,
+      targetId: "edit-financial-0",
+      materialTitle: `${projectName}2024年财务报表摘录`,
+      materialExcerpt: "2024年度公司实现营业收入120,000,000元，净利润15,000,000元，经营活动现金流保持净流入。主营业务毛利率较上年基本稳定，应收账款余额同比增长但仍处于可控区间。",
+    },
+    {
+      id: 3,
+      section: "第五章：访谈核心观点",
+      content: "受访人表示，公司未来三年将重点布局新能源汽车零部件市场...",
+      source: "访谈录音 (02:55 - 03:45)",
+      confidence: 0.92,
+      targetId: "edit-interview-0",
+      materialTitle: "管理层访谈录音转写",
+      materialExcerpt: "受访管理层表示，未来三年公司将重点布局新能源汽车零部件市场，并围绕核心客户推进区域交付网络建设。同时会逐步优化客户结构，提升高毛利项目的占比。",
+    },
+  ];
+
+  const getSectionTargetId = (sectionId: string, paragraphIndex: number) => `edit-${sectionId}-${paragraphIndex}`;
+
+  const registerEditTarget = (targetId: string) => (node: HTMLElement | null) => {
+    editTargetRefs.current[targetId] = node;
+  };
+
+  const jumpToEditTarget = (targetId: string, tab: "conflict" | "traceability") => {
+    setActiveAuditTab(tab);
+    setActiveEditTargetId(targetId);
+
+    window.requestAnimationFrame(() => {
+      editTargetRefs.current[targetId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  };
+
+  const applyEditConflictSource = (targetId: string, resolvedText?: string) => {
+    if (!resolvedText) {
+      jumpToEditTarget(targetId, "conflict");
+      return;
+    }
+
+    const sectionMap: Record<string, { sectionId: string; index: number }> = {
+      "edit-company-1": { sectionId: "company", index: 1 },
+      "edit-financial-2": { sectionId: "financial", index: 2 },
+      "edit-interview-1": { sectionId: "interview", index: 1 },
+    };
+
+    const target = sectionMap[targetId];
+    if (!target) {
+      return;
+    }
+
+    setReportSections((previous) =>
+      previous.map((section) =>
+        section.id === target.sectionId
+          ? {
+              ...section,
+              paragraphs: section.paragraphs.map((paragraph, index) =>
+                index === target.index ? resolvedText : paragraph,
+              ),
+            }
+          : section,
+      ),
+    );
+
+    if (isEditingDocument) {
+      setReportDraftSections((previous) =>
+        previous.map((section) =>
+          section.id === target.sectionId
+            ? {
+                ...section,
+                paragraphs: section.paragraphs.map((paragraph, index) =>
+                  index === target.index ? resolvedText : paragraph,
+                ),
+              }
+            : section,
+        ),
+      );
+    }
+
+    jumpToEditTarget(targetId, "conflict");
+  };
+
+  const startDocumentEdit = () => {
+    setReportDraftSections(
+      reportSections.map((section) => ({
+        ...section,
+        paragraphs: [...section.paragraphs],
+      })),
+    );
+    setIsEditingDocument(true);
+  };
+
+  const cancelDocumentEdit = () => {
+    setIsEditingDocument(false);
+    setReportDraftSections([]);
+  };
+
+  const saveDocumentEdit = () => {
+    setReportSections(
+      reportDraftSections.map((section, index) => ({
+        ...section,
+        title: section.title.trim() || reportSections[index]?.title || section.title,
+        paragraphs: section.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean),
+      })),
+    );
+    cancelDocumentEdit();
+  };
+
+  const updateDraftSectionTitle = (sectionIndex: number, value: string) => {
+    setReportDraftSections((previous) =>
+      previous.map((section, index) =>
+        index === sectionIndex
+          ? {
+              ...section,
+              title: value,
+            }
+          : section,
+      ),
+    );
+  };
+
+  const updateDraftParagraph = (sectionIndex: number, paragraphIndex: number, value: string) => {
+    setReportDraftSections((previous) =>
+      previous.map((section, index) => {
+        if (index !== sectionIndex) {
+          return section;
+        }
+
+        const nextParagraphs = [...section.paragraphs];
+        nextParagraphs[paragraphIndex] = value;
+
+        return {
+          ...section,
+          paragraphs: nextParagraphs,
+        };
+      }),
+    );
+  };
+
+  const renderHighlightedParagraph = (sectionId: string, paragraphIndex: number, text: string) => {
+    const highlightRules = {
+      company: {
+        0: {
+          tab: "traceability" as const,
+          text: `${projectName}（以下简称“公司”）成立于2010年，总部位于上海市张江高科技园区。`,
+          className: "rounded bg-fuchsia-100 px-1 ring-1 ring-fuchsia-300 shadow-[0_0_0_1px_rgba(217,70,239,0.08)]",
+        },
+        1: {
+          tab: "conflict" as const,
+          text: "公司实现营业收入约1.2亿元，",
+          className: "rounded bg-amber-200 px-1 ring-1 ring-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]",
+        },
+      },
+      financial: {
+        0: {
+          tab: "traceability" as const,
+          text: "2024年实现营业收入1.2亿元，净利润1500万元，",
+          className: "rounded bg-fuchsia-100 px-1 ring-1 ring-fuchsia-300 shadow-[0_0_0_1px_rgba(217,70,239,0.08)]",
+        },
+        2: {
+          tab: "conflict" as const,
+          text: "销售回款完全覆盖",
+          className: "rounded bg-amber-200 px-1 ring-1 ring-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]",
+        },
+      },
+      interview: {
+        0: {
+          tab: "traceability" as const,
+          text: "公司未来三年将重点布局新能源汽车零部件市场",
+          className: "rounded bg-fuchsia-100 px-1 ring-1 ring-fuchsia-300 shadow-[0_0_0_1px_rgba(217,70,239,0.08)]",
+        },
+        1: {
+          tab: "conflict" as const,
+          text: "无重大股权变动",
+          className: "rounded bg-amber-200 px-1 ring-1 ring-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]",
+        },
+      },
+    } as const;
+
+    const rule = highlightRules[sectionId as keyof typeof highlightRules]?.[paragraphIndex as 0 | 1 | 2];
+
+    if (!rule || activeAuditTab !== rule.tab || !text.includes(rule.text)) {
+      return text;
+    }
+
+    const highlightStart = text.indexOf(rule.text);
+    const before = text.slice(0, highlightStart);
+    const highlighted = text.slice(highlightStart, highlightStart + rule.text.length);
+    const after = text.slice(highlightStart + rule.text.length);
+
+    return (
+      <>
+        {before}
+        <span className={rule.className}>{highlighted}</span>
+        {after}
+      </>
+    );
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-gray-100">
-      <header className="h-16 border-b border-gray-200 px-8 flex items-center justify-between sticky top-0 bg-white z-30">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-gray-100">
+      <header className="h-16 shrink-0 border-b border-gray-200 px-8 flex items-center justify-between sticky top-0 bg-white z-30">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <ArrowLeft size={20} />
@@ -3158,9 +3597,30 @@ const EditReportView = ({ onBack, onDownload, intelligenceResult }: { onBack: ()
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-500" title="打印"><Printer size={18} /></button>
-          <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-500" title="分享"><Share2 size={18} /></button>
-          <div className="w-px h-6 bg-gray-200 mx-1" />
+          {isEditingDocument ? (
+            <>
+              <button
+                onClick={cancelDocumentEdit}
+                className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={saveDocumentEdit}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                保存
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={startDocumentEdit}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              <Edit3 size={16} />
+              <span>编辑</span>
+            </button>
+          )}
           <button
             onClick={onDownload}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95"
@@ -3171,51 +3631,29 @@ const EditReportView = ({ onBack, onDownload, intelligenceResult }: { onBack: ()
         </div>
       </header>
       <DocxToolbar />
-      <div className="flex-1 flex overflow-hidden">
+      <div className="min-h-0 flex-1 flex overflow-hidden">
         {/* Editor Sidebar */}
-        <div className="w-64 border-r border-gray-200 p-6 bg-white overflow-y-auto hidden lg:block">
+        <div className="hidden h-full w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-white p-6 lg:block">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">报告目录</h3>
           <ul className="space-y-2">
-            <li className="text-sm font-bold text-blue-600 p-2 bg-blue-50 rounded-lg cursor-pointer flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-              1. 企业基本情况
-            </li>
-            <li className="text-sm text-gray-600 p-2 hover:bg-gray-50 rounded-lg cursor-pointer flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-              2. 行业背景与地位
-            </li>
-            <li className="text-sm text-gray-600 p-2 hover:bg-gray-50 rounded-lg cursor-pointer flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-              3. 财务状况分析
-            </li>
-            <li className="text-sm text-gray-600 p-2 hover:bg-gray-50 rounded-lg cursor-pointer flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-              4. 风险评估与建议
-            </li>
+            {reportSections.map((section, index) => (
+              <li
+                key={section.id}
+                className={`cursor-pointer rounded-lg p-2 text-sm flex items-center gap-2 ${
+                  index === 0 ? "bg-blue-50 font-bold text-blue-600" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <div className={`h-1.5 w-1.5 rounded-full ${index === 0 ? "bg-blue-600" : "bg-gray-300"}`} />
+                {index + 1}. {section.title}
+              </li>
+            ))}
           </ul>
-
-          <div className="mt-8 pt-8 border-t border-gray-100">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">文档属性</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">格式</span>
-                <span className="text-gray-800 font-medium">Microsoft Word (.docx)</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">页面大小</span>
-                <span className="text-gray-800 font-medium">A4 (210 x 297 mm)</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">字体</span>
-                <span className="text-gray-800 font-medium">宋体 / Times New Roman</span>
-              </div>
-            </div>
-          </div>
         </div>
         {/* Main Editor Area */}
-        <div className="flex-1 p-12 overflow-y-auto bg-gray-200/50 flex flex-col items-center">
+        <div className="min-w-0 h-full flex-1 overflow-y-auto bg-gray-200/50 px-12 py-10">
           {/* Word-like Page Container */}
-          <div className="w-[816px] bg-white shadow-2xl border border-gray-300 min-h-[1056px] p-[96px] space-y-8 relative mb-12">
+          <div className="mx-auto w-full max-w-[960px] flex justify-center">
+            <div className="w-[880px] bg-white shadow-2xl border border-gray-300 min-h-[1320px] p-[108px] space-y-10 relative mb-12">
             {/* Ruler Simulation */}
             <div className="absolute top-0 left-0 right-0 h-6 bg-gray-50 border-b border-gray-200 flex items-center px-4 overflow-hidden opacity-50">
               <div className="flex gap-4 text-[8px] text-gray-400 font-mono">
@@ -3229,37 +3667,55 @@ const EditReportView = ({ onBack, onDownload, intelligenceResult }: { onBack: ()
 
             <h1 className="text-3xl font-bold text-center text-gray-900 mb-12 font-serif">{projectName}流贷尽调报告</h1>
 
-            <section className="space-y-4">
-              <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-800 pb-1 font-serif">1. 企业基本情况</h2>
-              <p className="text-gray-700 leading-relaxed text-justify indent-8">
-                {projectName}（以下简称“公司”）成立于2010年，总部位于上海市张江高科技园区。公司是一家专注于工业自动化设备研发、生产及销售的高新技术企业。经过十余年的发展，公司已在细分领域建立了较强的技术壁垒，拥有多项核心专利技术。
-              </p>
-              <p className="text-gray-700 leading-relaxed text-justify indent-8">
-                截至2024年底，公司注册资本为人民币5000万元，员工总数超过300人，其中研发人员占比超过40%。公司主要产品涵盖了智能组装线、精密检测设备以及工业机器人集成系统，广泛应用于电子制造、汽车零部件及新能源行业。
-              </p>
-            </section>
-
-            <section className="space-y-4">
-              <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-800 pb-1 font-serif">2. 行业背景与地位</h2>
-              <p className="text-gray-700 leading-relaxed text-justify indent-8">
-                随着全球制造业向智能化、数字化转型，工业自动化行业迎来了快速增长期。国内政策持续支持“中国制造2025”，为本土自动化设备厂商提供了广阔的市场空间。
-              </p>
-              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-sm text-blue-800 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <BrainCircuit size={16} />
-                  <p className="font-bold italic">AI 写作优化建议：</p>
+            {(isEditingDocument ? reportDraftSections : reportSections).map((section, sectionIndex) => (
+              <section key={section.id} className="space-y-4">
+                <div className="border-b-2 border-gray-800 pb-1">
+                  {isEditingDocument ? (
+                    <input
+                      value={section.title}
+                      onChange={(event) => updateDraftSectionTitle(sectionIndex, event.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xl font-bold text-gray-800 outline-none transition focus:border-blue-500 font-serif"
+                    />
+                  ) : (
+                    <h2 className="text-xl font-bold text-gray-800 font-serif">
+                      {sectionIndex + 1}. {section.title}
+                    </h2>
+                  )}
                 </div>
-                <p className="opacity-90">检测到当前章节内容较少，建议从以下维度进行补充：</p>
-                <ul className="list-disc list-inside mt-2 space-y-1 opacity-80">
-                  <li>增加 2022-2024 年行业复合增长率数据</li>
-                  <li>对比分析同行业竞争对手 B 公司的市场占有率</li>
-                  <li>引用最新的《工业自动化行业白皮书》核心结论</li>
-                </ul>
-                <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">
-                  AI 自动补全
-                </button>
-              </div>
-            </section>
+
+                {isEditingDocument ? (
+                  <div className="space-y-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-5">
+                    {section.paragraphs.map((paragraph, paragraphIndex) => (
+                      <textarea
+                        key={`${section.id}-${paragraphIndex}`}
+                        ref={registerEditTarget(getSectionTargetId(section.id, paragraphIndex)) as React.Ref<HTMLTextAreaElement>}
+                        value={paragraph}
+                        onChange={(event) => updateDraftParagraph(sectionIndex, paragraphIndex, event.target.value)}
+                        className={`min-h-[120px] w-full resize-y rounded-xl border bg-white px-4 py-3 text-sm leading-7 text-gray-700 outline-none transition focus:border-blue-500 ${
+                          activeEditTargetId === getSectionTargetId(section.id, paragraphIndex)
+                            ? "border-blue-300 ring-2 ring-blue-200"
+                            : "border-gray-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  section.paragraphs.map((paragraph, paragraphIndex) => (
+                    <p
+                      key={`${section.id}-${paragraphIndex}`}
+                      ref={registerEditTarget(getSectionTargetId(section.id, paragraphIndex)) as React.Ref<HTMLParagraphElement>}
+                      className={`text-gray-700 leading-relaxed text-justify indent-8 scroll-mt-24 ${
+                        activeEditTargetId === getSectionTargetId(section.id, paragraphIndex)
+                          ? "rounded-xl ring-2 ring-blue-200 ring-offset-4 ring-offset-white"
+                          : ""
+                      }`}
+                    >
+                      {renderHighlightedParagraph(section.id, paragraphIndex, paragraph)}
+                    </p>
+                  ))
+                )}
+              </section>
+            ))}
 
             {/* Page Footer Decoration */}
             <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-1">
@@ -3267,8 +3723,149 @@ const EditReportView = ({ onBack, onDownload, intelligenceResult }: { onBack: ()
               <span className="text-[10px] text-gray-300">第 1 页 / 共 12 页</span>
             </div>
           </div>
+          </div>
+        </div>
+
+        <div className="hidden h-full min-h-0 w-[420px] shrink-0 border-l border-gray-200 bg-white xl:flex xl:flex-col">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <ClipboardCheck size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">报告核查面板</h3>
+                <p className="text-[11px] text-gray-500">编辑时同步查看冲突与溯源结果</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex border-b border-gray-100">
+            <button
+              onClick={() => setActiveAuditTab("conflict")}
+              className={`relative flex-1 px-4 py-3 text-xs font-bold transition-colors ${
+                activeAuditTab === "conflict" ? "text-orange-600" : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              冲突标记 ({conflicts.length})
+              {activeAuditTab === "conflict" && (
+                <motion.div layoutId="editAuditTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveAuditTab("traceability")}
+              className={`relative flex-1 px-4 py-3 text-xs font-bold transition-colors ${
+                activeAuditTab === "traceability" ? "text-purple-600" : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              报告溯源 ({traces.length})
+              {activeAuditTab === "traceability" && (
+                <motion.div layoutId="editAuditTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600" />
+              )}
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+            {activeAuditTab === "conflict" ? (
+              <>
+                {conflicts.map((conflict, index) => (
+                  <div
+                    key={conflict.id}
+                    onClick={() => jumpToEditTarget(conflict.targetId, "conflict")}
+                    className="cursor-pointer rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-orange-200 hover:shadow-md"
+                  >
+                    <div className="mb-3 flex items-center justify-end">
+                      <span className="text-[10px] font-mono text-gray-400">#{index + 1}</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-gray-800">{conflict.type}: {conflict.field}</h4>
+                    <p className="mt-1 text-[11px] text-gray-400">定位页码：第 {conflict.page} 页</p>
+                    <div className="mt-4 space-y-3">
+                      {conflict.sources.map((source) => (
+                        <div
+                          key={source.id}
+                          className={`rounded-xl border p-3 ${
+                            source.tone === "warning"
+                              ? "border-orange-100 bg-orange-50/60"
+                              : "border-gray-100 bg-gray-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className={`text-[10px] font-bold uppercase tracking-wider ${
+                              source.tone === "warning" ? "text-orange-500" : "text-gray-400"
+                            }`}>
+                              {source.label}
+                            </div>
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                applyEditConflictSource(conflict.targetId, source.resolvedText);
+                              }}
+                              className="text-[10px] font-bold text-blue-600 hover:underline"
+                            >
+                              采纳
+                            </button>
+                          </div>
+                          <p className={`mt-2 text-xs ${
+                            source.tone === "warning" ? "text-gray-700" : "text-gray-600"
+                          }`}>
+                            {source.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 flex items-center justify-end border-t border-gray-100 pt-4">
+                      <button className="text-[11px] text-gray-400 hover:text-gray-600">忽略</button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                {traces.map((trace) => (
+                  <div
+                    key={trace.id}
+                    onClick={() => jumpToEditTarget(trace.targetId, "traceability")}
+                    className="space-y-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-purple-200 hover:shadow-md cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600">{trace.section}</h4>
+                      <span className="text-[10px] font-bold text-green-600">{(trace.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <p className="rounded-xl bg-gray-50 p-3 text-xs leading-relaxed text-gray-600">"{trace.content}"</p>
+                    <div className="rounded-xl border border-purple-100 bg-purple-50/60 p-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-purple-500">原始出处</div>
+                      <p className="mt-1 text-xs text-gray-700">{trace.source}</p>
+                    </div>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMaterialPreview({
+                          title: trace.materialTitle,
+                          section: trace.section,
+                          source: trace.source,
+                          excerpt: trace.materialExcerpt,
+                          targetId: trace.targetId,
+                          tab: "traceability",
+                        });
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-100 py-2 text-[11px] font-bold text-blue-600 transition-colors hover:bg-blue-50"
+                    >
+                      <span>查看原始素材</span>
+                      <ArrowRight size={12} />
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
         </div>
       </div>
+      <MaterialPreviewDialog
+        preview={materialPreview}
+        onClose={() => setMaterialPreview(null)}
+        onLocate={jumpToEditTarget}
+      />
     </div>
   );
 };
+
+// --- DSL Engine View Component ---
