@@ -12,6 +12,8 @@ export type KnowledgeDocument = {
   folderDepth: number;
   sizeLabel: string;
   updatedAtLabel: string;
+  parseStatus: 'success' | 'failed';
+  parseError: string | null;
 };
 
 export type FolderNode = {
@@ -179,6 +181,20 @@ const buildSummary = ({
   return `《${title}》已按「${location}」目录归档，识别为${type}，可用于${purpose}${tagPreview ? `，重点关联 ${tagPreview}` : ''}。`;
 };
 
+const getInitialParseFailureReason = (fileName: string, extension: string) => {
+  const normalizedName = stripExtension(fileName).toLowerCase();
+
+  if (!extension) {
+    return '文件缺少扩展名，首次解析未完成';
+  }
+
+  if (/(scan|扫描|img|image|图片|photo)/i.test(normalizedName) && ['jpg', 'jpeg', 'png', 'pdf'].includes(extension)) {
+    return 'OCR 首次解析超时';
+  }
+
+  return null;
+};
+
 const getRelativePath = (file: File, options?: GenerateOptions) => {
   const nativeRelativePath = file.webkitRelativePath?.trim();
 
@@ -212,14 +228,19 @@ export const generateKnowledgeDocuments = (
     const extension = getFileExtension(file.name);
     const type = detectType(file.name, directoryPath, extension);
     const tags = buildTags(file.name, directoryPath, type, extension);
+    const parseError = getInitialParseFailureReason(file.name, extension);
+    const parseStatus = parseError ? 'failed' : 'success';
 
     return {
       id: `${relativePath}-${file.lastModified}-${index}`,
       name: file.name,
       title,
       type,
-      summary: buildSummary({ title, type, directoryPath, tags }),
-      tags,
+      summary:
+        parseStatus === 'failed'
+          ? `《${title}》首次解析未完成，请点击重新解析后补全摘要与标签。`
+          : buildSummary({ title, type, directoryPath, tags }),
+      tags: parseStatus === 'failed' ? [] : tags,
       extension,
       directoryPath,
       relativePath,
@@ -227,6 +248,8 @@ export const generateKnowledgeDocuments = (
       folderDepth: directoryPath === DIRECTORY_LABEL ? 0 : directoryPath.split('/').length,
       sizeLabel: formatFileSize(file.size),
       updatedAtLabel: formatDate(file.lastModified),
+      parseStatus,
+      parseError,
     };
   });
 
@@ -253,6 +276,8 @@ export const updateKnowledgeDocument = (
     relativePath,
     segments: directoryPath === DIRECTORY_LABEL ? [DIRECTORY_LABEL] : directoryPath.split('/'),
     folderDepth: directoryPath === DIRECTORY_LABEL ? 0 : directoryPath.split('/').length,
+    parseStatus: 'success',
+    parseError: null,
   };
 };
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { DocumentClassificationSection } from './components/DocumentClassificationSection';
 import {
   LayoutDashboard,
@@ -20,6 +20,7 @@ import {
   Search,
   Bell,
   User,
+  Ban,
   Mic,
   Play,
   Pause,
@@ -66,6 +67,7 @@ import {
   Gavel,
   Scale,
   Tag,
+  Save,
   RefreshCw,
   Zap,
   PlusCircle,
@@ -80,24 +82,12 @@ import {
   TrendingUp,
   PieChart,
   BarChart3,
-  LineChart,
-  Code2,
-  FolderTree
+  LineChart
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { mockInterview, InterviewRecord, InterviewTranscript, DDQuestion } from "./types";
 
-type ViewType = "projectList" | "dashboard" | "audit" | "edit" | "intelligence" | "dslEngine" | "docManager";
-
-const DSLEngineView = lazy(() =>
-  import("./views/DSLEngineView").then((module) => ({ default: module.DSLEngineView })),
-);
-
-const DocumentManagerView = lazy(() =>
-  import("./views/DocumentManagerView").then((module) => ({
-    default: module.DocumentManagerView,
-  })),
-);
+type ViewType = "projectList" | "dashboard" | "audit" | "edit" | "intelligence" | "questionLists" | "templates" | "templatePreview";
 
 const loadDocxDeps = async () => {
   const [docxModule, fileSaverModule] = await Promise.all([
@@ -110,6 +100,93 @@ const loadDocxDeps = async () => {
     saveAs: fileSaverModule.saveAs,
   };
 };
+
+const TEMPLATE_OPTIONS = [
+  { id: "bank", title: "银行流贷尽调", desc: "关注经营现金流与抵押物状况", icon: Building },
+  { id: "equity", title: "股权投资尽调", desc: "侧重核心壁垒与团队稳定性", icon: TrendingUp },
+  { id: "general", title: "通用访谈体检", desc: "覆盖企业全貌的标准清单", icon: Activity },
+] as const;
+
+type InterviewQuestion = {
+  category: string;
+  question: string;
+  source: string;
+  type: string;
+};
+
+type QuestionCollection = {
+  id: string;
+  title: string;
+  desc: string;
+  questions: InterviewQuestion[];
+};
+
+type TemplateItem = {
+  id: string;
+  name: string;
+  description: string;
+  uploader: string;
+  uploadTime: string;
+  status: "enabled" | "disabled";
+};
+
+type FieldConfig = {
+  type: string;
+  extractionMethod: string;
+  dataSource: string;
+  businessRule: string;
+};
+
+const TEMPLATE_QUESTION_SETS: Record<string, any[]> = {
+  bank: [
+    { category: "财务状况", question: "贵司近三个月的经营性现金流情况如何？主要的回款难点在何处？", source: "模板预设", type: "preset" },
+    { category: "资产情况", question: "目前用于抵质押的资产占比多少？是否存在权利受限未披露的重资产？", source: "模板预设", type: "preset" },
+    { category: "经营稳定", question: "上下游结算方式近期是否有重大调整？", source: "模板预设", type: "preset" },
+  ],
+  equity: [
+    { category: "核心壁垒", question: "公司的核心技术相比竞品有哪些不可替代的优势？", source: "模板预设", type: "preset" },
+    { category: "团队构成", question: "核心研发团队的留存计划是什么？是否签署竞业协议？", source: "模板预设", type: "preset" },
+    { category: "合规风控", question: "是否存在尚未了结的重大知识产权争议？", source: "模板预设", type: "preset" },
+  ],
+  general: [
+    { category: "企业概况", question: "公司未来三年的发展战略和核心增长点是什么？", source: "模板预设", type: "preset" },
+    { category: "市场环境", question: "目前的行业竞争格局如何？贵司的市场占有率处于什么水平？", source: "模板预设", type: "preset" },
+  ],
+};
+
+const INITIAL_TEMPLATE_ITEMS: TemplateItem[] = [
+  {
+    id: "tpl-1",
+    name: "授信调查报告",
+    description: "用于企业客户授信前的标准化尽职调查报告模板，包含财务分析与风险评估。",
+    uploader: "张三",
+    uploadTime: "2026-04-10 14:30",
+    status: "enabled",
+  },
+  {
+    id: "tpl-2",
+    name: "季度财务分析",
+    description: "标准化的季度财务数据汇总与分析报告模板，适用于各部门季度汇报。",
+    uploader: "李四",
+    uploadTime: "2026-04-10 16:15",
+    status: "disabled",
+  },
+  {
+    id: "tpl-3",
+    name: "尽职调查清单",
+    description: "项目投资前期的尽职调查资料收集清单，涵盖法务、财务、业务等维度。",
+    uploader: "王五",
+    uploadTime: "2026-04-11 09:20",
+    status: "enabled",
+  },
+];
+
+const createDefaultField = (rule: string): FieldConfig => ({
+  type: "文本",
+  extractionMethod: "直接抽取",
+  dataSource: "材料提取",
+  businessRule: rule,
+});
 
 // Sidebar Item Component
 const SidebarItem = ({ icon: Icon, label, active = false, badge = 0, onClick }: { icon: any, label: string, active?: boolean, badge?: number, onClick?: () => void }) => (
@@ -169,17 +246,751 @@ const InterviewItem = ({ title, date, duration, onClick }: { title: string, date
   </div>
 );
 
-const LazyViewFallback = ({ title }: { title: string }) => (
-  <div className="flex h-full w-full items-center justify-center bg-slate-50 p-8">
-    <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-center shadow-sm">
-      <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
-      <p className="text-sm font-medium text-gray-600">{title}</p>
+const TemplatesView = ({
+  templates,
+  setTemplates,
+  onOpenTemplate,
+}: {
+  templates: TemplateItem[];
+  setTemplates: React.Dispatch<React.SetStateAction<TemplateItem[]>>;
+  onOpenTemplate: (template: TemplateItem, isNew?: boolean) => void;
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "parsing">("idle");
+  const uploadTimersRef = useRef<number[]>([]);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    action: "enable" | "disable" | "delete" | null;
+    template: TemplateItem | null;
+  }>({ isOpen: false, action: null, template: null });
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    template: TemplateItem | null;
+    name: string;
+    description: string;
+  }>({ isOpen: false, template: null, name: "", description: "" });
+
+  useEffect(() => {
+    return () => {
+      uploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
+  const filteredTemplates = templates.filter((template) =>
+    [template.name, template.description, template.uploader]
+      .join(" ")
+      .toLowerCase()
+      .includes(searchKeyword.trim().toLowerCase()),
+  );
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    uploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    uploadTimersRef.current = [];
+    setUploadStatus("uploading");
+
+    const uploadTimer = window.setTimeout(() => {
+      setUploadStatus("parsing");
+    }, 900);
+
+    const finishTimer = window.setTimeout(() => {
+      const now = new Date();
+      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const nextTemplate: TemplateItem = {
+        id: `tpl-${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, ""),
+        description: "新上传的自定义模板，请点击编辑补充模板描述。",
+        uploader: "当前用户",
+        uploadTime: formatted,
+        status: "enabled",
+      };
+      setTemplates((prev) => [nextTemplate, ...prev]);
+      setUploadStatus("idle");
+      event.target.value = "";
+      onOpenTemplate(nextTemplate, true);
+    }, 2600);
+
+    uploadTimersRef.current.push(uploadTimer, finishTimer);
+  };
+
+  const openConfirmModal = (action: "enable" | "disable" | "delete", template: TemplateItem) => {
+    setConfirmModal({ isOpen: true, action, template });
+  };
+
+  const executeAction = () => {
+    if (!confirmModal.template || !confirmModal.action) return;
+
+    if (confirmModal.action === "delete") {
+      setTemplates((prev) => prev.filter((item) => item.id !== confirmModal.template?.id));
+    } else {
+      setTemplates((prev) =>
+        prev.map((item) =>
+          item.id === confirmModal.template?.id
+            ? { ...item, status: confirmModal.action === "enable" ? "enabled" : "disabled" }
+            : item,
+        ),
+      );
+    }
+
+    setConfirmModal({ isOpen: false, action: null, template: null });
+  };
+
+  const openEditModal = (template: TemplateItem) => {
+    setEditModal({
+      isOpen: true,
+      template,
+      name: template.name,
+      description: template.description,
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editModal.template || !editModal.name.trim()) return;
+    setTemplates((prev) =>
+      prev.map((item) =>
+        item.id === editModal.template?.id
+          ? { ...item, name: editModal.name.trim(), description: editModal.description.trim() }
+          : item,
+      ),
+    );
+    setEditModal({ isOpen: false, template: null, name: "", description: "" });
+  };
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-slate-50 p-8">
+      <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">我的模板</h1>
+          <p className="mt-2 text-sm text-gray-500">统一管理报告模板，支持上传、启停、编辑和删除。</p>
+          <p className="mt-2 text-sm text-amber-700">当报告生成结果不准确时，可以在这里修改模板规则后，再返回尽调详情重新生成报告。</p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              placeholder="请搜索模板名称"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-10 text-sm text-gray-700 outline-none transition focus:border-blue-500 sm:w-72"
+            />
+            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          </div>
+          <button
+            onClick={handleUploadClick}
+            disabled={uploadStatus !== "idle"}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {uploadStatus === "idle" ? <Plus size={16} /> : <RefreshCw size={16} className="animate-spin" />}
+            <span>{uploadStatus === "uploading" ? "上传中..." : uploadStatus === "parsing" ? "解析中..." : "上传模板"}</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".doc,.docx,.pdf,.txt"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {filteredTemplates.map((template) => (
+            <div
+              key={template.id}
+              onClick={() => onOpenTemplate(template)}
+              className={`group flex h-56 flex-col rounded-2xl border p-6 transition-all ${
+                template.status === "enabled"
+                  ? "border-gray-200 bg-white shadow-sm hover:border-blue-200 hover:shadow-lg"
+                  : "border-gray-100 bg-gray-50 opacity-80 hover:opacity-100"
+              }`}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${template.status === "enabled" ? "bg-blue-50 text-blue-600" : "bg-gray-200 text-gray-500"}`}>
+                  <FileText size={22} />
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${template.status === "enabled" ? "bg-green-50 text-green-600" : "bg-gray-200 text-gray-500"}`}>
+                  {template.status === "enabled" ? "已启用" : "已禁用"}
+                </span>
+              </div>
+
+              <div className="min-h-0 flex-1">
+                <h3 className="truncate text-base font-bold text-gray-800" title={template.name}>
+                  {template.name}
+                </h3>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-500" title={template.description}>
+                  {template.description}
+                </p>
+              </div>
+
+              <div className="mt-5 flex items-end justify-between border-t border-gray-100 pt-4">
+                <div className="space-y-2 text-xs text-gray-400">
+                  <div className="flex items-center gap-1.5">
+                    <User size={12} />
+                    <span className="max-w-[110px] truncate">{template.uploader}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Clock size={12} />
+                    <span>{template.uploadTime}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openConfirmModal(template.status === "enabled" ? "disable" : "enable", template);
+                    }}
+                    className={`rounded-md p-1.5 transition-colors ${template.status === "enabled" ? "text-amber-500 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
+                    title={template.status === "enabled" ? "禁用模板" : "启用模板"}
+                  >
+                    {template.status === "enabled" ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEditModal(template);
+                    }}
+                    className="rounded-md p-1.5 text-blue-500 transition-colors hover:bg-blue-50"
+                    title="编辑模板"
+                  >
+                    <Edit3 size={16} />
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openConfirmModal("delete", template);
+                    }}
+                    className="rounded-md p-1.5 text-red-500 transition-colors hover:bg-red-50"
+                    title="删除模板"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredTemplates.length === 0 && (
+          <div className="mt-8 rounded-3xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <FileText size={24} />
+            </div>
+            <p className="text-base font-bold text-gray-800">没有找到匹配的模板</p>
+            <p className="mt-2 text-sm text-gray-500">可以换个关键词试试，或者直接上传一个新模板。</p>
+          </div>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {uploadStatus !== "idle" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-40 flex items-center justify-center rounded-3xl bg-white/60 backdrop-blur-sm"
+          >
+            <div className="flex min-w-[260px] flex-col items-center gap-5 rounded-3xl bg-white px-8 py-8 shadow-xl">
+              <div className="relative flex h-16 w-16 items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+                <div className="absolute inset-0 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                {uploadStatus === "parsing" && <FileText size={24} className="text-blue-600" />}
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-800">{uploadStatus === "uploading" ? "正在上传..." : "正在解析..."}</p>
+                <p className="mt-1 text-sm text-gray-500">{uploadStatus === "uploading" ? "请稍候，文件传输中" : "AI 正在提取模板结构与内容"}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmModal.isOpen && confirmModal.template && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 backdrop-blur-sm"
+          >
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${confirmModal.action === "delete" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"}`}>
+                  <AlertCircle size={18} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {confirmModal.action === "delete"
+                    ? "确认删除模板？"
+                    : confirmModal.action === "enable"
+                      ? "确认启用模板？"
+                      : "确认禁用模板？"}
+                </h3>
+              </div>
+              <p className="mb-6 text-sm leading-6 text-gray-600">
+                {confirmModal.action === "delete"
+                  ? `您确定要删除模板“${confirmModal.template.name}”吗？此操作不可恢复。`
+                  : `您确定要${confirmModal.action === "enable" ? "启用" : "禁用"}模板“${confirmModal.template.name}”吗？`}
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setConfirmModal({ isOpen: false, action: null, template: null })}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={executeAction}
+                  className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${confirmModal.action === "delete" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
+                >
+                  确认
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editModal.isOpen && editModal.template && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 backdrop-blur-sm"
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <Edit3 size={18} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">编辑模板信息</h3>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">模板名称</label>
+                  <input
+                    value={editModal.name}
+                    onChange={(event) => setEditModal((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="请输入模板名称"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">模板描述</label>
+                  <textarea
+                    value={editModal.description}
+                    onChange={(event) => setEditModal((prev) => ({ ...prev, description: event.target.value }))}
+                    placeholder="请输入模板描述"
+                    className="h-24 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setEditModal({ isOpen: false, template: null, name: "", description: "" })}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveEdit}
+                  disabled={!editModal.name.trim()}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
-  </div>
-);
+  );
+};
+
+const TemplatePreviewView = ({
+  template,
+  isNew,
+  onBack,
+}: {
+  template: TemplateItem;
+  isNew?: boolean;
+  onBack: () => void;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [activeConfig, setActiveConfig] = useState<string | "global" | null>(null);
+  const [formData, setFormData] = useState<Record<string, FieldConfig>>({
+    companyNameRule: createDefaultField("优先从企业基本信息目录下的营业执照中提取，如果没有则从其他资料中补充。"),
+    jurisdictionRule: createDefaultField("由手动录入或访谈资料识别。"),
+    investigatorRule: createDefaultField("由项目成员手动维护。"),
+    industryRule: createDefaultField("优先来自工商信息，其次来自访谈和文档资料。"),
+    applyAmountRule: createDefaultField("来自授信申请材料或访谈确认结果。"),
+    guaranteeMethodRule: createDefaultField("来自授信方案材料及访谈记录。"),
+    establishTimeRule: createDefaultField("来自营业执照或工商登记信息。"),
+    registeredCapitalRule: createDefaultField("来自营业执照或工商登记信息。"),
+    registeredAddressRule: createDefaultField("来自营业执照。"),
+    actualAddressRule: createDefaultField("优先来自访谈，如未提及则沿用注册地址。"),
+    historyChangeRule: createDefaultField("来自历史沿革材料、工商变更记录及访谈补充。"),
+    equityStructureRule: createDefaultField("来自股权结构图、工商穿透数据或客户提供材料。"),
+    financeDescRule: createDefaultField("来自近三年财务报表与最近一期管理报表，并结合访谈进行解释。"),
+  });
+
+  useEffect(() => {
+    if (!showToast) return;
+    const timer = window.setTimeout(() => setShowToast(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [showToast]);
+
+  const updateField = (key: string, value: FieldConfig) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const renderEditableField = (configKey: string) => {
+    const value = formData[configKey];
+    if (!value) return null;
+
+    if (!isEditing) {
+      return <span className="text-red-500">{value.businessRule}</span>;
+    }
+
+    return (
+      <button
+        onClick={() => setActiveConfig(configKey)}
+        className={`group flex w-full items-center justify-between rounded border border-dashed px-3 py-2 text-left text-sm transition-all ${
+          activeConfig === configKey
+            ? "border-blue-500 bg-blue-100 text-blue-800 shadow-sm"
+            : "border-blue-200 bg-blue-50/60 text-blue-700 hover:border-blue-400 hover:bg-blue-50"
+        }`}
+      >
+        <span className="truncate pr-3">{value.businessRule}</span>
+        <Settings size={14} className={`shrink-0 ${activeConfig === configKey ? "text-blue-600" : "text-blue-400 opacity-0 group-hover:opacity-100"}`} />
+      </button>
+    );
+  };
+
+  const activeFieldConfig = activeConfig && activeConfig !== "global" ? formData[activeConfig] : null;
+
+  return (
+    <div className="flex h-full flex-col bg-gray-50/50">
+      <div className="flex items-center justify-between border-b border-gray-100 bg-white px-8 py-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+              <FileText size={16} className="text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-medium text-gray-800">{template.name}.docx</h1>
+              {isNew && (
+                <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+                  刚刚上传
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {isEditing ? (
+            <>
+              <button
+                onClick={() => setActiveConfig("global")}
+                className="flex items-center gap-2 rounded-lg bg-purple-50 px-4 py-2 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-100"
+              >
+                <Settings size={16} />
+                全局配置
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setActiveConfig(null);
+                }}
+                className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200"
+              >
+                <X size={16} />
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setActiveConfig(null);
+                  setShowToast(true);
+                }}
+                className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2 text-sm font-medium text-green-600 transition-colors hover:bg-green-100"
+              >
+                <Save size={16} />
+                保存修改
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                setIsEditing(true);
+                setActiveConfig("global");
+              }}
+              className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100"
+            >
+              <Edit3 size={16} />
+              编辑模板
+            </button>
+          )}
+
+          <div className="mx-1 h-6 w-px bg-gray-200" />
+
+          <button className="flex items-center gap-2 rounded-lg bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100">
+            <Download size={16} />
+            下载源文件
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 justify-center overflow-auto p-8">
+          <div className="min-h-[1056px] w-full max-w-[900px] rounded-sm border border-gray-200 bg-white p-12 shadow-sm md:p-16">
+            <div className="mx-auto space-y-6 font-serif text-[14px] text-gray-800">
+              <div className="mb-8 space-y-2 text-center">
+                <h1 className="text-2xl font-bold text-gray-900">小微企业授信业务尽职调查报告</h1>
+                <p className="text-sm text-gray-600">（适用于 2000 万元以下公司授信业务）</p>
+              </div>
+
+              <section>
+                <h2 className="mb-0 border border-black bg-gray-100 p-1 text-lg font-bold">一、报审方案及尽调情况</h2>
+                <table className="w-full border-collapse border border-black text-center text-sm">
+                  <tbody>
+                    <tr>
+                      <td className="w-32 border border-black bg-gray-50 p-2">企业名称</td>
+                      <td colSpan={3} className="border border-black p-2 text-left">{renderEditableField("companyNameRule")}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black bg-gray-50 p-2">归属管辖</td>
+                      <td className="border border-black p-2">{renderEditableField("jurisdictionRule")}</td>
+                      <td className="w-32 border border-black bg-gray-50 p-2">调查人（双人）</td>
+                      <td className="border border-black p-2">{renderEditableField("investigatorRule")}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black bg-gray-50 p-2">行业分类</td>
+                      <td className="border border-black p-2">{renderEditableField("industryRule")}</td>
+                      <td className="border border-black bg-gray-50 p-2">申请额度</td>
+                      <td className="border border-black p-2">{renderEditableField("applyAmountRule")}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black bg-gray-50 p-2">担保方式</td>
+                      <td colSpan={3} className="border border-black p-2 text-left">{renderEditableField("guaranteeMethodRule")}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+
+              <section className="mt-6">
+                <h2 className="mb-0 border border-black bg-gray-100 p-1 text-lg font-bold">二、申请人基本情况</h2>
+                <table className="w-full border-collapse border border-black text-center text-sm">
+                  <tbody>
+                    <tr>
+                      <td className="w-32 border border-black bg-gray-50 p-2">成立时间</td>
+                      <td className="border border-black p-2">{renderEditableField("establishTimeRule")}</td>
+                      <td className="w-24 border border-black bg-gray-50 p-2">注册资本</td>
+                      <td className="border border-black p-2">{renderEditableField("registeredCapitalRule")}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black bg-gray-50 p-2">注册地址</td>
+                      <td colSpan={3} className="border border-black p-2 text-left">{renderEditableField("registeredAddressRule")}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black bg-gray-50 p-2">实际经营地址</td>
+                      <td colSpan={3} className="border border-black p-2 text-left">{renderEditableField("actualAddressRule")}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="space-y-4 border border-t-0 border-black p-4">
+                  <div>
+                    <p className="font-bold">介绍历史沿革和主营业务变动情况：</p>
+                    <div className="mt-2">{renderEditableField("historyChangeRule")}</div>
+                  </div>
+                  <div>
+                    <p className="font-bold">股权结构如下（可图示或列表）：</p>
+                    <div className="mt-2">{renderEditableField("equityStructureRule")}</div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="mt-6">
+                <h2 className="mb-0 border border-black bg-gray-100 p-1 text-lg font-bold">三、财务情况说明</h2>
+                <div className="border border-t-0 border-black p-4">
+                  {renderEditableField("financeDescRule")}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        {isEditing && (
+          <div className="flex w-[380px] shrink-0 flex-col border-l border-gray-200 bg-white">
+            {!activeConfig ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-6 text-center text-gray-400">
+                <Settings size={48} className="mb-4 text-gray-200" />
+                <p>请在左侧选择需要配置的字段，或点击右上角进行全局配置</p>
+              </div>
+            ) : activeConfig === "global" ? (
+              <>
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+                  <h3 className="flex items-center gap-2 text-base font-bold text-gray-800">
+                    <Settings size={16} className="text-purple-600" />
+                    模板全局处理逻辑配置
+                  </h3>
+                  <button
+                    onClick={() => setActiveConfig(null)}
+                    className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 space-y-6 overflow-auto p-6">
+                  <div className="space-y-3">
+                    <label className="text-sm font-bold text-gray-800">全局处理策略</label>
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 transition-colors hover:bg-gray-50">
+                      <input type="radio" name="globalStrategy" className="mt-1" defaultChecked />
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">精准匹配优先</div>
+                        <div className="mt-0.5 text-xs text-gray-500">严格按字段配置提取，缺失则留空，不做主观推断。</div>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 transition-colors hover:bg-gray-50">
+                      <input type="radio" name="globalStrategy" className="mt-1" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">智能补全优先</div>
+                        <div className="mt-0.5 text-xs text-gray-500">规则提取失败时，允许模型结合上下文进行补全。</div>
+                      </div>
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-800">全局前置处理</label>
+                    <textarea
+                      rows={5}
+                      defaultValue={"1. 对图片与 PDF 统一做 OCR 识别。\n2. 提取访谈录音中的关键实体信息。\n3. 对姓名、证件号等敏感信息进行脱敏。"}
+                      className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : activeFieldConfig ? (
+              <>
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+                  <h3 className="flex items-center gap-2 text-base font-bold text-gray-800">
+                    <Settings size={16} className="text-blue-600" />
+                    配置字段属性
+                  </h3>
+                  <button
+                    onClick={() => setActiveConfig(null)}
+                    className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 space-y-5 overflow-auto p-6">
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <Database size={14} className="text-gray-400" />
+                      数据来源
+                    </label>
+                    <input
+                      value={activeFieldConfig.dataSource}
+                      onChange={(event) => updateField(activeConfig, { ...activeFieldConfig, dataSource: event.target.value })}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <BookOpen size={14} className="text-gray-400" />
+                      业务规则
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={activeFieldConfig.businessRule}
+                      onChange={(event) => updateField(activeConfig, { ...activeFieldConfig, businessRule: event.target.value })}
+                      className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">字段类型</label>
+                    <select
+                      value={activeFieldConfig.type}
+                      onChange={(event) => updateField(activeConfig, { ...activeFieldConfig, type: event.target.value })}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                    >
+                      <option>文本</option>
+                      <option>数字</option>
+                      <option>布尔</option>
+                      <option>时间</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">抽取方式</label>
+                    <select
+                      value={activeFieldConfig.extractionMethod}
+                      onChange={(event) => updateField(activeConfig, { ...activeFieldConfig, extractionMethod: event.target.value })}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                    >
+                      <option>直接抽取</option>
+                      <option>归纳总结</option>
+                      <option>计算</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {showToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            className="fixed bottom-8 right-8 z-50 flex items-center gap-3 rounded-2xl border border-green-100 bg-white px-5 py-4 shadow-xl"
+          >
+            <CheckCircle2 size={20} className="text-green-600" />
+            <div>
+              <p className="text-sm font-bold text-gray-900">模板修改已保存</p>
+              <p className="text-xs text-gray-500">新的字段规则已同步到模板配置中。</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>("projectList");
+  const [editInitialTab, setEditInitialTab] = useState<"conflict" | "traceability" | "templateRules">("conflict");
+  const [dashboardSection, setDashboardSection] = useState<"questions" | null>(null);
+  const [templates, setTemplates] = useState<TemplateItem[]>(INITIAL_TEMPLATE_ITEMS);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
+  const [isNewTemplatePreview, setIsNewTemplatePreview] = useState(false);
+  const [questionCollections, setQuestionCollections] = useState<QuestionCollection[]>(() =>
+    TEMPLATE_OPTIONS.map((template) => ({
+      id: template.id,
+      title: template.title,
+      desc: template.desc,
+      questions: (TEMPLATE_QUESTION_SETS[template.id] || []).map((item) => ({ ...item })),
+    })),
+  );
   const [intelligenceSource, setIntelligenceSource] = useState<"projectList" | "dashboard">("projectList");
   const [intelligenceInitialStep, setIntelligenceInitialStep] = useState<"input" | "confirm" | "loading" | "results">("input");
   const [intelligenceResult, setIntelligenceResult] = useState<any>(null);
@@ -429,9 +1240,13 @@ export default function App() {
 
         <nav className="flex-1 py-4">
           <SidebarItem icon={ClipboardCheck} label="尽调管理" active={currentView === "projectList" || currentView === "dashboard"} onClick={() => setCurrentView("projectList")} />
-          <SidebarItem icon={BookOpen} label="我的模板" />
-          <SidebarItem icon={Code2} label="模板引擎" active={currentView === "dslEngine"} onClick={() => setCurrentView("dslEngine")} />
-          <SidebarItem icon={FolderTree} label="资料知识库" active={currentView === "docManager"} onClick={() => setCurrentView("docManager")} />
+          <SidebarItem icon={BookOpen} label="我的模板" active={currentView === "templates"} onClick={() => setCurrentView("templates")} />
+          <SidebarItem
+            icon={HelpCircle}
+            label="问题清单"
+            active={currentView === "questionLists"}
+            onClick={() => setCurrentView("questionLists")}
+          />
         </nav>
 
         <div className="p-4 border-t border-gray-100">
@@ -459,18 +1274,20 @@ export default function App() {
               setCurrentView("intelligence");
             }}
             onDirectNew={(projectName, name, template, initialQs, targetType, targetCode, enableAI) => {
+              const hasCompanyName = Boolean(name.trim());
+              const shouldStartBackgroundAI = enableAI !== false && hasCompanyName;
               const initRes = {
                 projectName: projectName,
                 companyName: name,
                 targetType: targetType || "company",
                 targetCode: targetCode || "",
-                isSkip: enableAI === false,
-                isPending: enableAI !== false,
+                isSkip: !shouldStartBackgroundAI,
+                isPending: shouldStartBackgroundAI,
                 template: template,
                 questions: initialQs
               };
               setCurrentView("dashboard");
-              if (enableAI !== false) {
+              if (shouldStartBackgroundAI) {
                 handleStartBackgroundAI(initRes);
               } else {
                 setIntelligenceResult(initRes);
@@ -483,8 +1300,14 @@ export default function App() {
 
         {currentView === "dashboard" && (
           <DashboardView
-            onBack={() => setCurrentView("projectList")}
-            onEdit={() => setCurrentView("edit")}
+            onBack={() => {
+              setCurrentView("projectList");
+              setDashboardSection(null);
+            }}
+            onEdit={() => {
+              setEditInitialTab("conflict");
+              setCurrentView("edit");
+            }}
             onAudit={() => setCurrentView("audit")}
             onDownload={handleDownloadDocx}
             onOpenModal={() => setIsModalOpen(true)}
@@ -501,6 +1324,44 @@ export default function App() {
               setHasBackgroundResult(false);
             }}
             onStartBackgroundAI={() => handleStartBackgroundAI()}
+            onOpenTemplates={() => {
+              setEditInitialTab("templateRules");
+              setCurrentView("edit");
+            }}
+            initialSection={dashboardSection}
+            onSectionHandled={() => setDashboardSection(null)}
+            questionCollections={questionCollections}
+            setQuestionCollections={setQuestionCollections}
+          />
+        )}
+
+        {currentView === "questionLists" && (
+          <QuestionListView
+            collections={questionCollections}
+            setCollections={setQuestionCollections}
+          />
+        )}
+
+        {currentView === "templates" && (
+          <TemplatesView
+            templates={templates}
+            setTemplates={setTemplates}
+            onOpenTemplate={(template, isNew) => {
+              setSelectedTemplate(template);
+              setIsNewTemplatePreview(Boolean(isNew));
+              setCurrentView("templatePreview");
+            }}
+          />
+        )}
+
+        {currentView === "templatePreview" && selectedTemplate && (
+          <TemplatePreviewView
+            template={selectedTemplate}
+            isNew={isNewTemplatePreview}
+            onBack={() => {
+              setCurrentView("templates");
+              setIsNewTemplatePreview(false);
+            }}
           />
         )}
 
@@ -520,19 +1381,10 @@ export default function App() {
             onDownloadConflict={handleDownloadConflictDocx}
             onDownloadTraceability={handleDownloadTraceabilityDocx}
             intelligenceResult={intelligenceResult}
+            initialSideTab={editInitialTab}
+            templates={templates}
+            setTemplates={setTemplates}
           />
-        )}
-
-        {currentView === "docManager" && (
-          <Suspense fallback={<LazyViewFallback title="资料知识库加载中..." />}>
-            <DocumentManagerView />
-          </Suspense>
-        )}
-
-        {currentView === "dslEngine" && (
-          <Suspense fallback={<LazyViewFallback title="模板引擎加载中..." />}>
-            <DSLEngineView />
-          </Suspense>
         )}
 
         {currentView === "intelligence" && (
@@ -708,6 +1560,383 @@ export default function App() {
 
 // --- New View Components ---
 
+const QuestionListView = ({
+  collections,
+  setCollections,
+}: {
+  collections: QuestionCollection[];
+  setCollections: React.Dispatch<React.SetStateAction<QuestionCollection[]>>;
+}) => {
+  const [activeCollectionId, setActiveCollectionId] = useState<string>(collections[0]?.id || "bank");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newCollectionTitle, setNewCollectionTitle] = useState("");
+  const [newCollectionDesc, setNewCollectionDesc] = useState("");
+  const [showAddQuestionForm, setShowAddQuestionForm] = useState(false);
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [editingQuestionText, setEditingQuestionText] = useState("");
+  const addQuestionTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!collections.find((item) => item.id === activeCollectionId)) {
+      setActiveCollectionId(collections[0]?.id || "bank");
+    }
+  }, [activeCollectionId, collections]);
+
+  const activeCollection = collections.find((item) => item.id === activeCollectionId);
+
+  const handleCreateCollection = () => {
+    if (!newCollectionTitle.trim()) return;
+    const nextCollection: QuestionCollection = {
+      id: `custom-${Date.now()}`,
+      title: newCollectionTitle.trim(),
+      desc: newCollectionDesc.trim() || "自定义问题集合",
+      questions: [],
+    };
+    setCollections((prev) => [...prev, nextCollection]);
+    setActiveCollectionId(nextCollection.id);
+    setShowCreateForm(false);
+    setNewCollectionTitle("");
+    setNewCollectionDesc("");
+  };
+
+  const handleAddQuestion = () => {
+    if (!newQuestionText.trim() || !activeCollection) return;
+    setCollections((prev) =>
+      prev.map((collection) =>
+        collection.id === activeCollection.id
+          ? {
+              ...collection,
+              questions: [
+                ...collection.questions,
+                {
+                  category: "未分类",
+                  question: newQuestionText.trim(),
+                  source: "问题清单预设",
+                  type: "preset",
+                },
+              ],
+            }
+          : collection,
+      ),
+    );
+    setNewQuestionText("");
+    window.setTimeout(() => {
+      addQuestionTextareaRef.current?.focus();
+    }, 0);
+  };
+
+  const handleAddQuestionAndClose = () => {
+    if (!newQuestionText.trim() || !activeCollection) return;
+    handleAddQuestion();
+    setShowAddQuestionForm(false);
+  };
+
+  const handleStartEditQuestion = (index: number, item: InterviewQuestion) => {
+    setEditingQuestionIndex(index);
+    setEditingQuestionText(item.question);
+  };
+
+  const handleSaveQuestion = () => {
+    if (editingQuestionIndex === null || !activeCollection || !editingQuestionText.trim()) return;
+    setCollections((prev) =>
+      prev.map((collection) =>
+        collection.id === activeCollection.id
+          ? {
+              ...collection,
+              questions: collection.questions.map((item, index) =>
+                index === editingQuestionIndex
+                  ? { ...item, question: editingQuestionText.trim() }
+                  : item,
+              ),
+            }
+          : collection,
+      ),
+    );
+    setEditingQuestionIndex(null);
+    setEditingQuestionText("");
+  };
+
+  const handleDeleteQuestion = (index: number) => {
+    if (!activeCollection) return;
+    const target = activeCollection.questions[index];
+    if (!target) return;
+    const confirmed = window.confirm(`确认删除问题“${target.question}”吗？`);
+    if (!confirmed) return;
+    setCollections((prev) =>
+      prev.map((collection) =>
+        collection.id === activeCollection.id
+          ? { ...collection, questions: collection.questions.filter((_, itemIndex) => itemIndex !== index) }
+          : collection,
+      ),
+    );
+    if (editingQuestionIndex === index) {
+      setEditingQuestionIndex(null);
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-8 py-4 backdrop-blur">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">问题清单</h1>
+            <p className="mt-1 text-sm text-gray-500">集中管理问题集合，并维护集合内的问题。</p>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-hidden p-8">
+        <div className="grid h-full gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+            <div className="border-b border-gray-100 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.28em] text-gray-400">问题集合</p>
+                  <p className="mt-2 text-sm text-gray-500">选择一套问题清单进行管理</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreateForm((prev) => !prev);
+                    setShowAddQuestionForm(false);
+                  }}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${showCreateForm ? "border-blue-600 bg-blue-600 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
+                >
+                  <PlusCircle size={14} />
+                  <span>新建</span>
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[calc(100vh-220px)] overflow-y-auto p-3">
+              <AnimatePresence>
+                {showCreateForm && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="mb-3 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60"
+                  >
+                    <div className="space-y-3 p-4">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
+                        <BookOpen size={14} />
+                        <span>新建问题集合</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={newCollectionTitle}
+                        onChange={(e) => setNewCollectionTitle(e.target.value)}
+                        placeholder="输入问题集合名称..."
+                        className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                      <input
+                        type="text"
+                        value={newCollectionDesc}
+                        onChange={(e) => setNewCollectionDesc(e.target.value)}
+                        placeholder="输入问题集合说明（选填）..."
+                        className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setShowCreateForm(false);
+                            setNewCollectionTitle("");
+                            setNewCollectionDesc("");
+                          }}
+                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={handleCreateCollection}
+                          disabled={!newCollectionTitle.trim()}
+                          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          创建问题集合
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="space-y-2">
+                {collections.map((collection) => {
+                  const isActive = activeCollectionId === collection.id;
+                  return (
+                    <button
+                      key={collection.id}
+                      onClick={() => setActiveCollectionId(collection.id)}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${isActive ? "border-blue-200 bg-blue-50 shadow-sm" : "border-gray-200 bg-white hover:border-blue-100 hover:bg-blue-50/40"}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-gray-800">{collection.title}</p>
+                          <p className="mt-1 truncate text-xs text-gray-500">{collection.desc}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${isActive ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500"}`}>
+                          {collection.questions.length}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+
+          <section className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+            <div className="border-b border-gray-100 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.28em] text-gray-400">当前集合</p>
+                  <h2 className="mt-2 text-xl font-bold text-gray-800">{activeCollection?.title || "未选择问题集合"}</h2>
+                  <p className="mt-1 text-sm text-gray-500">{activeCollection?.desc || "请选择左侧问题集合"}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAddQuestionForm((prev) => !prev);
+                    setShowCreateForm(false);
+                  }}
+                  disabled={!activeCollection}
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition-all ${showAddQuestionForm ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-white text-amber-600 hover:bg-amber-50"} disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <Plus size={16} />
+                  <span>新增问题</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[calc(100vh-220px)] overflow-y-auto">
+              <AnimatePresence>
+                {showAddQuestionForm && activeCollection && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-b border-gray-100"
+                  >
+                    <div className="space-y-3 bg-amber-50/40 p-5">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-700">
+                        <Plus size={14} />
+                        <span>新增问题</span>
+                      </div>
+                      <textarea
+                        ref={addQuestionTextareaRef}
+                        autoFocus
+                        rows={3}
+                        value={newQuestionText}
+                        onChange={(e) => setNewQuestionText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddQuestion();
+                          }
+                        }}
+                        placeholder="输入问题内容..."
+                        className="w-full resize-none rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setShowAddQuestionForm(false);
+                            setNewQuestionText("");
+                          }}
+                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={handleAddQuestionAndClose}
+                          disabled={!newQuestionText.trim()}
+                          className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-700 transition-all hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          保存
+                        </button>
+                        <button
+                          onClick={handleAddQuestion}
+                          disabled={!newQuestionText.trim()}
+                          className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          保存并继续新增
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="divide-y divide-gray-100">
+                {activeCollection?.questions.length ? (
+                  activeCollection.questions.map((item, index) => (
+                    <div key={`${activeCollection.id}-${index}`} className="p-5 transition-colors hover:bg-gray-50/70">
+                      {editingQuestionIndex === index ? (
+                        <div className="space-y-3">
+                          <textarea
+                            autoFocus
+                            rows={3}
+                            value={editingQuestionText}
+                            onChange={(e) => setEditingQuestionText(e.target.value)}
+                            className="w-full resize-none rounded-xl border border-blue-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => setEditingQuestionIndex(null)}
+                              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={handleSaveQuestion}
+                              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-blue-700"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">{item.category}</span>
+                              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500">预设问题</span>
+                            </div>
+                            <p className="mt-3 text-sm font-medium leading-7 text-gray-800">{item.question}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleStartEditQuestion(index, item)}
+                              className="rounded-lg border border-gray-200 p-2 text-gray-400 transition-all hover:bg-white hover:text-blue-600"
+                              title="编辑问题"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteQuestion(index)}
+                              className="rounded-lg border border-gray-200 p-2 text-gray-400 transition-all hover:bg-white hover:text-red-600"
+                              title="删除问题"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-12 text-center text-gray-400">
+                    <BookOpen size={32} className="mx-auto opacity-20" />
+                    <p className="mt-3 text-sm font-medium">当前问题集合还没有问题</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Project List View Component
 const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: { onSelectProject: () => void, onStartIntelligence: () => void, onDirectNew: (projectName: string, companyName: string, template: string, initialQuestions: any[], targetType?: string, targetCode?: string, enableAI?: boolean) => void }) => {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
@@ -718,31 +1947,8 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
   const [targetType, setTargetType] = useState<"company" | "individual">("company");
   const [targetCode, setTargetCode] = useState("");
 
-  const templates = [
-    { id: "bank", title: "银行流贷尽调", desc: "关注经营现金流与抵押物状况", icon: Building },
-    { id: "equity", title: "股权投资尽调", desc: "侧重核心壁垒与团队稳定性", icon: TrendingUp },
-    { id: "general", title: "通用访谈体检", desc: "覆盖企业全貌的标准清单", icon: Activity }
-  ];
-
-  const templateQuestions: Record<string, any[]> = {
-    bank: [
-      { category: "财务状况", question: "贵司近三个月的经营性现金流情况如何？主要的回款难点在何处？", source: "模板预设", type: "preset" },
-      { category: "资产情况", question: "目前用于抵质押的资产占比多少？是否存在权利受限未披露的重资产？", source: "模板预设", type: "preset" },
-      { category: "经营稳定", question: "上下游结算方式近期是否有重大调整？", source: "模板预设", type: "preset" }
-    ],
-    equity: [
-      { category: "核心壁垒", question: "公司的核心技术相比竞品有哪些不可替代的优势？", source: "模板预设", type: "preset" },
-      { category: "团队构成", question: "核心研发团队的留存计划是什么？是否签署竞业协议？", source: "模板预设", type: "preset" },
-      { category: "合规风控", question: "是否存在尚未了结的重大知识产权争议？", source: "模板预设", type: "preset" }
-    ],
-    general: [
-      { category: "企业概况", question: "公司未来三年的发展战略和核心增长点是什么？", source: "模板预设", type: "preset" },
-      { category: "市场环境", question: "目前的行业竞争格局如何？贵司的市场占有率处于什么水平？", source: "模板预设", type: "preset" }
-    ]
-  };
-
   const handleCreateProject = () => {
-    if (!customProjectName.trim() || !newProjectName.trim()) {
+    if (!customProjectName.trim()) {
       return;
     }
 
@@ -750,7 +1956,7 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
       customProjectName.trim(),
       newProjectName.trim(),
       selectedTemplate,
-      [...templateQuestions[selectedTemplate]],
+      [...TEMPLATE_QUESTION_SETS[selectedTemplate]],
       targetType,
       targetCode,
       true,
@@ -843,13 +2049,13 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 ml-1">
-                          受调主体名称 / 标识代码 *
+                          企业名称 / 信用代码
                         </label>
                         <input
                           type="text"
                           value={newProjectName}
                           onChange={(e) => setNewProjectName(e.target.value)}
-                          placeholder="请输入企业名称，也可输入信用代码"
+                          placeholder="请输入企业名称或信用代码（选填）"
                           className="w-full py-3 px-5 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
                         />
                       </div>
@@ -863,7 +2069,7 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
                           onChange={(e) => setSelectedTemplate(e.target.value)}
                           className="w-full py-3 px-5 pr-10 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium cursor-pointer"
                         >
-                          {templates.map((tpl) => (
+                          {TEMPLATE_OPTIONS.map((tpl) => (
                             <option key={tpl.id} value={tpl.id}>
                               {tpl.title} - {tpl.desc}
                             </option>
@@ -872,24 +2078,6 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
                         <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400">
                           <ChevronDown size={18} />
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700 ml-1">上传参考资料 (可选)</label>
-                      <div
-                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log("Files dropped in DirectNewModal:", e.dataTransfer.files);
-                        }}
-                        onClick={() => document.getElementById('direct-file-upload')?.click()}
-                        className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-100 hover:border-blue-300 transition-all group"
-                      >
-                        <input id="direct-file-upload" type="file" multiple className="hidden" />
-                        <Upload size={18} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
-                        <div className="text-xs font-bold text-gray-600">点击或拖拽上传资料</div>
                       </div>
                     </div>
 
@@ -902,7 +2090,7 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
                       </button>
                       <button
                         onClick={handleCreateProject}
-                        disabled={!newProjectName.trim()}
+                        disabled={!customProjectName.trim()}
                         className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md flex items-center justify-center gap-2 text-sm"
                       >
                         新建 <ArrowRight size={16} />
@@ -966,7 +2154,7 @@ const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: 
 
 
 // Dashboard View Component (Project Detail)
-const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult }: {
+const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, onOpenTemplates, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult, initialSection, onSectionHandled, questionCollections, setQuestionCollections }: {
   onBack: () => void,
   onEdit: () => void,
   onAudit: () => void,
@@ -974,14 +2162,22 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
   onOpenModal: () => void,
   onStartIntelligence: (step?: "input" | "confirm" | "loading") => void,
   onStartBackgroundAI?: () => void,
+  onOpenTemplates: () => void,
   intelligenceResult?: any,
   setIntelligenceResult: (res: any) => void,
   isBackgroundAnalyzing?: boolean,
   hasBackgroundResult?: boolean,
-  onViewBackgroundResult?: () => void
+  onViewBackgroundResult?: () => void,
+  initialSection?: "questions" | null,
+  onSectionHandled?: () => void,
+  questionCollections: QuestionCollection[],
+  setQuestionCollections: React.Dispatch<React.SetStateAction<QuestionCollection[]>>
 }) => {
   const projectName = intelligenceResult?.companyName || "A公司";
-  const [questions, setQuestions] = useState<any[]>([]);
+  const dashboardProjectName = intelligenceResult?.projectName?.trim() || "未命名尽调项目";
+  const dashboardCompanyName = intelligenceResult?.companyName?.trim() || "未填写企业名称";
+  const questionsSectionRef = useRef<HTMLElement>(null);
+  const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
 
   useEffect(() => {
     if (intelligenceResult?.isSkip) {
@@ -1003,7 +2199,6 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
   }, [intelligenceResult]);
 
   const [showIntelligenceModal, setShowIntelligenceModal] = useState(false);
-  const [modalActiveTab, setModalActiveTab] = useState<"data" | "questions" | "guidelines">("data");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [crawlingLog, setCrawlingLog] = useState<string[]>([]);
@@ -1089,21 +2284,204 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
   const [newQuestionInput, setNewQuestionInput] = useState("");
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [textMaterial, setTextMaterial] = useState("");
+  const [hasDocumentMaterials, setHasDocumentMaterials] = useState(false);
   const [pendingQuestions, setPendingQuestions] = useState<{ category: string, question: string, source: string, type: string, selected: boolean }[]>([]);
+  const [questionListMode, setQuestionListMode] = useState<"default" | "ai">("default");
+  const [currentPresetTemplate, setCurrentPresetTemplate] = useState<string>(intelligenceResult?.template || "bank");
+  const [showPresetTemplatePanel, setShowPresetTemplatePanel] = useState(false);
+  const [isGeneratingAIInsights, setIsGeneratingAIInsights] = useState(false);
+  const [aiInsightLogs, setAIInsightLogs] = useState<string[]>([]);
+  const [showAIInsightToast, setShowAIInsightToast] = useState(false);
+  const [showHeaderEditModal, setShowHeaderEditModal] = useState(false);
+  const [headerProjectNameInput, setHeaderProjectNameInput] = useState("");
+  const [headerCompanyNameInput, setHeaderCompanyNameInput] = useState("");
+  const aiInsightTimersRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    return () => {
+      aiInsightTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (intelligenceResult?.template) {
+      setCurrentPresetTemplate(intelligenceResult.template);
+    }
+  }, [intelligenceResult?.template]);
+
+  useEffect(() => {
+    setHeaderProjectNameInput(intelligenceResult?.projectName?.trim() || "");
+    setHeaderCompanyNameInput(intelligenceResult?.companyName?.trim() || "");
+  }, [intelligenceResult?.projectName, intelligenceResult?.companyName]);
+
+  useEffect(() => {
+    if (initialSection !== "questions") return;
+
+    const timer = window.setTimeout(() => {
+      questionsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      onSectionHandled?.();
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [initialSection, onSectionHandled]);
+
+  const hasCompanyName = Boolean((intelligenceResult?.companyName || "").trim());
+  const hasTextMaterial = Boolean(textMaterial.trim());
+  const canUseAIInsights = hasCompanyName || hasDocumentMaterials || hasTextMaterial;
+  const aiInsightRequirementText = `存在企业名称、文档资料或文本资料中的任意一项后，即可使用 AI 洞察。`;
+
+  const ensurePendingQuestions = () => {
+    if (pendingQuestions.length === 0 && intelligenceResult?.aiQuestions?.length) {
+      setPendingQuestions(intelligenceResult.aiQuestions.map((q: any) => ({ ...q, selected: true })));
+    }
+  };
+
+  const buildAIInsightQuestions = () => {
+    if (intelligenceResult?.aiQuestions?.length) {
+      return intelligenceResult.aiQuestions;
+    }
+
+    const company = intelligenceResult?.companyName || projectName;
+    return [
+      { category: "财务状况", question: `结合 ${company} 当前回款周期，是否存在应收账款持续拉长或坏账准备不足的情况？`, source: "AI 洞察", type: "material" },
+      { category: "合规性", question: `围绕 ${company} 最近三年的税务申报与工商变更，是否存在尚未解释清楚的合规风险点？`, source: "AI 洞察", type: "material" },
+      { category: "经营风险", question: `${company} 的核心客户与核心供应商集中度是否过高，对经营稳定性会产生什么影响？`, source: "AI 洞察", type: "material" },
+      { category: "市场竞争", question: `${company} 在当前行业价格竞争下，毛利率和订单质量是否还能维持稳定？`, source: "AI 洞察", type: "material" },
+      { category: "财务状况", question: `${company} 近两期经营性现金流与利润表现是否存在背离，主要原因是什么？`, source: "AI 洞察", type: "material" },
+      { category: "合规性", question: `${company} 近期是否存在行政处罚、欠税、环保或劳动合规方面的潜在争议？`, source: "AI 洞察", type: "material" },
+      { category: "经营风险", question: `${company} 目前最依赖的客户或项目是什么，一旦波动会对经营产生多大影响？`, source: "AI 洞察", type: "material" },
+      { category: "供应链", question: `${company} 的关键供应商替代难度如何，是否存在单点依赖或议价能力偏弱问题？`, source: "AI 洞察", type: "material" },
+      { category: "人力资源", question: `${company} 核心管理层与关键技术人员是否稳定，是否存在离职或激励失效风险？`, source: "AI 洞察", type: "material" },
+      { category: "市场竞争", question: `${company} 所在细分市场的竞争格局是否变化，是否出现明显的价格战或客户流失迹象？`, source: "AI 洞察", type: "material" },
+      { category: "资产情况", question: `${company} 的主要抵押、质押或受限资产是否会影响后续融资和经营安排？`, source: "AI 洞察", type: "material" },
+      { category: "治理结构", question: `${company} 股东结构、实际控制人安排或历史股权变动中，是否存在需要重点解释的事项？`, source: "AI 洞察", type: "material" },
+      { category: "回款管理", question: `${company} 主要客户的回款周期、信用政策和逾期情况是否出现阶段性恶化？`, source: "AI 洞察", type: "material" },
+      { category: "订单质量", question: `${company} 当前在手订单的毛利率、履约难度和验收节奏是否存在明显分化？`, source: "AI 洞察", type: "material" },
+    ];
+  };
+
+  const startAIInsightGeneration = ({ preserveCurrentView = false }: { preserveCurrentView?: boolean } = {}) => {
+    aiInsightTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    aiInsightTimersRef.current = [];
+    setAIInsightLogs([]);
+    setIsGeneratingAIInsights(true);
+    setPendingQuestions([]);
+
+    if (!preserveCurrentView) {
+      setQuestionListMode("ai");
+    }
+
+    const logs = [
+      "正在整理企业抓取结果与已有资料...",
+      "正在识别高风险追问点与管理层答复缺口...",
+      "正在生成分主题访谈问题，并进行重复问题合并...",
+      "正在输出可直接导入的问题清单...",
+    ];
+
+    logs.forEach((log, index) => {
+      const timer = window.setTimeout(() => {
+        setAIInsightLogs((prev) => [...prev, log]);
+      }, index * 700);
+      aiInsightTimersRef.current.push(timer);
+    });
+
+    const finishTimer = window.setTimeout(() => {
+      const generatedQuestions = buildAIInsightQuestions();
+      setPendingQuestions(generatedQuestions.map((q: any) => ({ ...q, selected: true })));
+      setIntelligenceResult((prev: any) => (
+        prev
+          ? { ...prev, aiQuestions: generatedQuestions }
+          : { companyName: projectName, aiQuestions: generatedQuestions }
+      ));
+      setIsGeneratingAIInsights(false);
+      setShowAIInsightToast(true);
+    }, logs.length * 700 + 500);
+
+    aiInsightTimersRef.current.push(finishTimer);
+  };
 
   const handleConfirmAIQuestions = () => {
     const selectedQs = pendingQuestions.filter(q => q.selected).map(({ selected, ...rest }) => rest);
-    setQuestions(prev => [...selectedQs, ...prev]);
-    setPendingQuestions([]);
-    setShowIntelligenceModal(false);
+    setQuestions(prev => {
+      const existing = new Set(prev.map(q => q.question));
+      const merged = selectedQs.filter(q => !existing.has(q.question));
+      return [...merged, ...prev];
+    });
+    setQuestionListMode("default");
   };
 
   const togglePendingQuestion = (index: number) => {
     setPendingQuestions(prev => prev.map((q, i) => i === index ? { ...q, selected: !q.selected } : q));
   };
 
+  const handleOpenAIQuestionList = () => {
+    if (!canUseAIInsights) {
+      return;
+    }
+
+    if (isGeneratingAIInsights) {
+      return;
+    }
+
+    if (questionListMode === "ai") {
+      setQuestionListMode("default");
+      return;
+    }
+
+    if (pendingQuestions.length > 0 || intelligenceResult?.aiQuestions?.length) {
+      ensurePendingQuestions();
+      setQuestionListMode("ai");
+      return;
+    }
+
+    startAIInsightGeneration({ preserveCurrentView: true });
+  };
+
+  const handleRegenerateAIInsights = () => {
+    if (!canUseAIInsights) {
+      return;
+    }
+
+    startAIInsightGeneration({ preserveCurrentView: questionListMode === "default" });
+  };
+
+  const handleToggleQuestionList = () => {
+    if (questionListMode === "default" && !intelligenceResult?.aiQuestions?.length && pendingQuestions.length === 0) {
+      startAIInsightGeneration({ preserveCurrentView: true });
+      return;
+    }
+
+    ensurePendingQuestions();
+    setQuestionListMode(prev => prev === "default" ? "ai" : "default");
+  };
+
+  const handleSelectPresetTemplate = (templateId: string) => {
+    if (templateId !== currentPresetTemplate) {
+      const nextTemplateLabel = questionCollections.find((item) => item.id === templateId)?.title || "新的问题清单";
+      const confirmed = window.confirm(`确认切换到“${nextTemplateLabel}”吗？`);
+      if (!confirmed) return;
+    }
+
+    setQuestionListMode("default");
+    setCurrentPresetTemplate(templateId);
+    setShowPresetTemplatePanel(false);
+  };
+
+  const handleOpenQuestionListSwitch = () => {
+    setShowPresetTemplatePanel(true);
+  };
+
   const handleDeleteQuestion = (index: number) => {
     setQuestions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveHeaderInfo = () => {
+    setIntelligenceResult((prev: any) => ({
+      ...(prev || {}),
+      projectName: headerProjectNameInput.trim() || "未命名尽调项目",
+      companyName: headerCompanyNameInput.trim(),
+    }));
+    setShowHeaderEditModal(false);
   };
 
   const startEditing = (index: number, text: string) => {
@@ -1129,18 +2507,107 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
     setNewQuestionInput("");
   };
 
+  const insightReasonMap: Record<string, string> = {
+    "财务状况": "结合财务指标波动与回款质量生成",
+    "经营风险": "结合经营稳定性与人员结构生成",
+    "合规性": "结合工商、税务与司法线索生成",
+    "供应链": "结合上下游依赖与履约稳定性生成",
+    "人力资源": "结合核心团队稳定性生成",
+    "市场竞争": "结合行业竞争格局与订单质量生成",
+    "资产情况": "结合抵押质押与资产受限信息生成",
+    "治理结构": "结合股东结构与历史变更线索生成",
+    "回款管理": "结合客户信用政策与回款表现生成",
+    "订单质量": "结合订单结构与履约节奏生成",
+  };
+  const currentCollection = questionCollections.find((item) => item.id === currentPresetTemplate);
+  const presetQuestions = currentCollection?.questions || [];
+  const activeQuestions = questions.filter((q) => !(q.type === "preset" || q.source.includes("模板预设") || q.source.includes("系统预制")));
+  const currentPresetTemplateLabel = currentCollection?.title || "问题清单";
+  const selectedAIQuestionCount = pendingQuestions.filter((q) => q.selected).length;
+  const rawCompanyData = intelligenceResult?.companyData?.result || intelligenceResult?.companyData || {};
+  const companyOverview = intelligenceResult?.companyData?.overview;
+  const financialAnomalies = intelligenceResult?.companyData?.financialAnomalies || [];
+  const formatCompanyDate = (value?: number | null) => {
+    if (!value) return "暂无";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "暂无";
+    return date.toLocaleDateString("zh-CN");
+  };
+  const companyOverviewItems = [
+    { label: "企业名称", value: rawCompanyData.name || intelligenceResult?.companyName || "暂无" },
+    { label: "企业状态", value: rawCompanyData.regStatus || "暂无" },
+    { label: "法定代表人", value: rawCompanyData.legalPersonName || "暂无" },
+    { label: "统一社会信用代码", value: rawCompanyData.creditCode || "暂无" },
+    { label: "注册资本", value: rawCompanyData.regCapital || rawCompanyData.actualCapital || "暂无" },
+    { label: "成立日期", value: rawCompanyData.estiblishTime ? formatCompanyDate(rawCompanyData.estiblishTime) : "暂无" },
+    { label: "所属行业", value: rawCompanyData.industry || rawCompanyData.industryAll?.categoryBig || companyOverview?.industry || "暂无" },
+    { label: "人员规模", value: rawCompanyData.staffNumRange || rawCompanyData.socialStaffNum || companyOverview?.employees || companyOverview?.scale || "暂无" },
+    { label: "注册地址", value: rawCompanyData.regLocation || companyOverview?.location || "暂无" },
+  ];
+  const companyDetailItems = [
+    { label: "公司类型", value: rawCompanyData.companyOrgType || "暂无" },
+    { label: "股票简称", value: rawCompanyData.bondName || rawCompanyData.alias || "暂无" },
+    { label: "股票代码", value: rawCompanyData.bondNum || "暂无" },
+    { label: "登记机关", value: rawCompanyData.regInstitute || "暂无" },
+    { label: "注册号", value: rawCompanyData.regNumber || "暂无" },
+    { label: "组织机构代码", value: rawCompanyData.orgNumber || "暂无" },
+    { label: "核准日期", value: rawCompanyData.approvedTime ? formatCompanyDate(rawCompanyData.approvedTime) : "暂无" },
+    { label: "曾用名", value: rawCompanyData.historyNames || rawCompanyData.historyNameList?.join("；") || "暂无" },
+  ];
+  const riskHighlights = [
+    intelligenceResult?.companyData?.litigation?.count
+      ? { label: "法律诉讼", value: `${intelligenceResult.companyData.litigation.count} 条`, tone: "text-red-600" }
+      : null,
+    intelligenceResult?.companyData?.pledges?.count
+      ? { label: "股权质押", value: `${intelligenceResult.companyData.pledges.count} 笔`, tone: "text-orange-600" }
+      : null,
+    intelligenceResult?.companyData?.taxPenalty?.count
+      ? { label: "税务处罚", value: `${intelligenceResult.companyData.taxPenalty.count} 条`, tone: "text-amber-600" }
+      : null,
+  ].filter(Boolean) as { label: string; value: string; tone: string }[];
+  const detailSummaryItems = [
+    ...companyDetailItems,
+    ...riskHighlights.map((item) => ({ label: item.label, value: item.value, tone: item.tone })),
+    ...(financialAnomalies.length > 0
+      ? financialAnomalies.map((item: any, idx: number) => ({
+          label: `财务异常 ${idx + 1}`,
+          value: item.detail ? `${item.title || item.type || "财务异常"}：${item.detail}` : item.title || item.type || "财务异常",
+          tone: "text-orange-600",
+        }))
+      : []),
+  ];
+
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-8 py-4 backdrop-blur">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
               <span className="cursor-pointer hover:text-blue-600" onClick={onBack}>尽调管理</span>
               <ChevronRight size={14} />
-              <span className="text-gray-800 font-medium">{projectName} - 尽调详情</span>
+              <span className="text-gray-800 font-medium">{dashboardProjectName}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm text-gray-500">
+                <span className="font-medium text-gray-400">企业名称：</span>
+                <span className="font-medium text-gray-800">{dashboardCompanyName}</span>
+              </div>
+              <button
+                onClick={() => setShowHeaderEditModal(true)}
+                title="修改项目名称和企业名称"
+                aria-label="修改项目名称和企业名称"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              >
+                <Edit3 size={16} />
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <button className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50">
+            <button
+              onClick={onOpenTemplates}
+              className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+            >
               更换模板
             </button>
             <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700">
@@ -1204,7 +2671,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                         </div>
                         <div>
                           <h2 className="text-lg font-black bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent mb-1">
-                            AI 后台智能分析中
+                            企业数据抓取中
                           </h2>
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-blue-900/60 text-sm font-medium">正在调取全网检索接口，执行深度隐患筛查，此过程不影响您当前的操作</p>
@@ -1225,8 +2692,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                         <BrainCircuit size={24} />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-gray-800">AI 智能分析已完成</h2>
-                        <p className="text-gray-500 text-xs mt-0.5">识别出 {intelligenceResult.companyData?.financialAnomalies?.length || 0} 项财务异常与 {intelligenceResult.companyData?.litigation?.count || 0} 条法律风险</p>
+                        <h2 className="text-base font-bold text-gray-800">企业数据抓取已完成</h2>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1240,7 +2706,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                         className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2"
                       >
                         <Layout size={16} />
-                        <span>查看分析结果</span>
+                        <span>查看抓取结果</span>
                       </button>
                       <button
                         onClick={() => setShowConfirmModal(true)}
@@ -1258,7 +2724,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                         <BrainCircuit size={24} />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-gray-800">AI 智能分析</h2>
+                        <h2 className="text-base font-bold text-gray-800">企业数据抓取</h2>
                         <p className="text-gray-400 text-xs mt-0.5">全网数据深度抓取，精准识别访谈重点</p>
                       </div>
                     </div>
@@ -1267,7 +2733,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                       className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-100 flex items-center gap-2"
                     >
                       <Zap size={16} />
-                      开启分析
+                      开始抓取
                     </button>
                   </div>
                 )}
@@ -1279,7 +2745,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="bg-white w-full max-w-6xl h-[85vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+              className="bg-white w-full max-w-5xl h-[80vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
             >
               <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50 to-transparent">
                 <div className="flex items-center gap-4">
@@ -1287,7 +2753,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                     <BrainCircuit size={28} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-800">AI 智能分析结果</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">企业数据抓取结果</h2>
                     <p className="text-sm text-blue-600 font-medium">深度扫描结果 · {intelligenceResult.companyData?.overview?.industry}</p>
                   </div>
                 </div>
@@ -1299,182 +2765,54 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                 </button>
               </div>
 
-              <div className="flex-1 flex overflow-hidden">
-                {/* Left Sidebar - Tabs */}
-                <div className="w-64 bg-white border-r border-gray-100 p-6 space-y-2">
-                  <button
-                    onClick={() => setModalActiveTab("data")}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${modalActiveTab === 'data' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    <Database size={18} />
-                    全网抓取数据
-                  </button>
-                  <button
-                    onClick={() => setModalActiveTab("questions")}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all ${modalActiveTab === 'questions' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <MessageSquare size={18} />
-                      补充访谈问题
+              <div className="flex-1 overflow-y-auto p-8">
+                <div className="space-y-8">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                        <Briefcase size={18} className="text-blue-600" />
+                        企业概况
+                      </h3>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${modalActiveTab === 'questions' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
-                      {pendingQuestions.length}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-8">
-                  {modalActiveTab === "data" && (
-                    <div className="space-y-8">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Company Overview */}
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
-                          <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
-                            <Briefcase size={18} className="text-blue-600" />
-                            企业概况
-                          </h3>
-                          <div className="space-y-3">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">所属行业</span>
-                              <span className="text-gray-800 font-bold">{intelligenceResult.companyData?.overview?.industry}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">成立年限</span>
-                              <span className="text-gray-800 font-bold">{intelligenceResult.companyData?.overview?.years}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">人员规模</span>
-                              <span className="text-gray-800 font-bold">{intelligenceResult.companyData?.overview?.employees}</span>
-                            </div>
-                          </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {companyOverviewItems.map((item) => (
+                        <div key={item.label} className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <p className="text-xs font-medium text-gray-400">{item.label}</p>
+                          <p className="mt-2 text-sm font-bold leading-6 text-gray-800 break-all">{item.value}</p>
                         </div>
+                      ))}
+                    </div>
+                  </div>
 
-                        {/* Financial Anomalies */}
-                        <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 space-y-4">
-                          <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
-                            <AlertCircle size={18} className="text-orange-500" />
-                            财务异常提醒
-                          </h3>
-                          <div className="space-y-3">
-                            {intelligenceResult.companyData?.financialAnomalies?.map((item: any, idx: number) => (
-                              <div key={idx} className="flex items-start gap-2 text-sm">
-                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mt-1.5 shrink-0" />
-                                <span className="text-gray-700 font-medium">{item.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Risk Summary */}
-                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100 space-y-4">
-                          <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
-                            <ShieldAlert size={18} className="text-red-500" />
-                            风险预警
-                          </h3>
-                          <div className="space-y-3">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">法律诉讼</span>
-                              <span className="text-red-600 font-bold">{intelligenceResult.companyData?.litigation?.count} 条</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">股权质押</span>
-                              <span className="text-orange-600 font-bold">{intelligenceResult.companyData?.pledges?.count} 笔</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">行政处罚</span>
-                              <span className="text-gray-800 font-bold">无</span>
-                            </div>
-                          </div>
-                        </div>
+                  {detailSummaryItems.length > 0 && (
+                    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert size={18} className="text-blue-600" />
+                        <h3 className="text-base font-bold text-gray-800">抓取结果明细</h3>
                       </div>
 
-                    </div>
-                  )}
-
-                  {modalActiveTab === "questions" && (
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                          <MessageSquare size={24} className="text-blue-600" />
-                          AI 识别的访谈重点
-                        </h3>
-                        {pendingQuestions.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const allSelected = pendingQuestions.every(q => q.selected);
-                              setPendingQuestions(pendingQuestions.map(q => ({ ...q, selected: !allSelected })));
-                            }}
-                            className="text-sm font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-xl transition-all border border-blue-100"
-                          >
-                            {pendingQuestions.every(q => q.selected) ? '取消全选' : '全选所有建议'}
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4">
-                        {pendingQuestions.length > 0 ? (
-                          pendingQuestions.map((q, idx) => (
-                            <motion.div
-                              key={idx}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: idx * 0.05 }}
-                              onClick={() => togglePendingQuestion(idx)}
-                              className={`p-5 border rounded-2xl flex items-start gap-4 transition-all cursor-pointer group relative overflow-hidden ${q.selected
-                                ? 'bg-blue-50/50 border-blue-300 shadow-sm ring-1 ring-blue-300'
-                                : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
-                                }`}
-                            >
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 transition-all ${q.selected ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-blue-50 text-blue-600'
-                                }`}>
-                                {q.selected ? <Check size={20} /> : idx + 1}
-                              </div>
-                              <div className="space-y-2 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${q.selected ? 'bg-blue-200 text-blue-800' : 'bg-blue-50 text-blue-600'
-                                    }`}>{q.category}</span>
-                                </div>
-                                <p className={`text-base font-semibold leading-relaxed transition-colors ${q.selected ? 'text-blue-900' : 'text-gray-700'
-                                  }`}>{q.question}</p>
-                              </div>
-                            </motion.div>
-                          ))
-                        ) : (
-                          <div className="p-12 border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center text-gray-400 space-y-3">
-                            <Sparkles size={40} className="opacity-20" />
-                            <p className="text-sm font-medium">暂无 AI 建议问题</p>
+                      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {detailSummaryItems.map((item) => (
+                          <div key={`${item.label}-${item.value}`} className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-4">
+                            <p className="text-xs font-medium text-gray-400">{item.label}</p>
+                            <p className={`mt-2 text-sm font-semibold leading-6 break-all ${"tone" in item && item.tone ? item.tone : "text-gray-800"}`}>
+                              {item.value}
+                            </p>
                           </div>
-                        )}
+                        ))}
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="p-8 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-                  <span className="text-sm text-gray-500 font-bold">
-                    已选择 <span className="text-blue-600">{pendingQuestions.filter(q => q.selected).length}</span> 个访谈重点
-                  </span>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowIntelligenceModal(false)}
-                    className="px-8 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all"
-                  >
-                    稍后处理
-                  </button>
-                  <button
-                    onClick={handleConfirmAIQuestions}
-                    disabled={pendingQuestions.filter(q => q.selected).length === 0}
-                    className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Check size={18} />
-                    确认并导入访谈清单
-                  </button>
-                </div>
+              <div className="p-8 bg-gray-50 border-t border-gray-100 flex justify-end shrink-0">
+                <button
+                  onClick={() => setShowIntelligenceModal(false)}
+                  className="px-8 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all"
+                >
+                  关闭
+                </button>
               </div>
             </motion.div>
           </div>
@@ -1484,7 +2822,11 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
 
         {/* Materials Sections */}
         <div className="space-y-8">
-          <DocumentClassificationSection sectionNumber={1} title="文档资料" />
+          <DocumentClassificationSection
+            sectionNumber={1}
+            title="文档资料"
+            onFilesStateChange={setHasDocumentMaterials}
+          />
           
           <section className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1505,17 +2847,11 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
 
           {/* 3. 访谈记录 */}
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
                 3. 访谈记录
               </h2>
-              <div className="flex items-center gap-2">
-                <button className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700">
-                  <Mic size={14} />
-                  <span>开始新访谈</span>
-                </button>
-              </div>
             </div>
             <div className="space-y-3">
               <InterviewItem
@@ -1534,7 +2870,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
           </section>
 
           {/* 4. 访谈问题清单 */}
-          <section className="space-y-4">
+          <section ref={questionsSectionRef} className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
@@ -1542,136 +2878,417 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
               </h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setShowManualAdd(!showManualAdd)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${showManualAdd ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                    }`}
+                  onClick={handleOpenAIQuestionList}
+                  disabled={!canUseAIInsights}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${!canUseAIInsights ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400" : questionListMode === "ai" ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700" : "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
+                  title={!canUseAIInsights ? aiInsightRequirementText : undefined}
                 >
-                  <Plus size={14} />
-                  <span>手动添加</span>
+                  <Sparkles size={14} />
+                  <span>{questionListMode === "ai" ? "退出AI洞察" : "AI洞察"}</span>
                 </button>
+                {(isGeneratingAIInsights || pendingQuestions.length > 0 || intelligenceResult?.aiQuestions?.length) && (
+                  <button
+                    onClick={handleRegenerateAIInsights}
+                    className="rounded-lg border border-blue-200 bg-white p-2 text-blue-600 transition-all hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="重新AI洞察"
+                    disabled={isGeneratingAIInsights || !canUseAIInsights}
+                  >
+                    <RefreshCw size={14} className={isGeneratingAIInsights ? "animate-spin" : ""} />
+                  </button>
+                )}
+                <button
+                  onClick={handleOpenQuestionListSwitch}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
+                >
+                  <span>切换问题清单</span>
+                </button>
+                {questionListMode === "default" && (
+                  <button
+                    onClick={() => setShowManualAdd(!showManualAdd)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${showManualAdd ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                  >
+                    <Plus size={14} />
+                    <span>手动添加</span>
+                  </button>
+                )}
               </div>
             </div>
 
+            {!canUseAIInsights && (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-sm text-amber-800">
+                {aiInsightRequirementText}
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              {/* Manual Add Header */}
               <div className="p-4 border-b border-gray-50 bg-gray-50/30 flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">清单内容</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  {questionListMode === "ai" ? "AI洞察问题清单" : "当前问题清单"}
+                </span>
+                {questionListMode === "ai" ? (
+                  <div className="flex items-center gap-2">
+                    {pendingQuestions.length > 0 && (
+                      <button
+                        onClick={() => {
+                          const allSelected = pendingQuestions.every(q => q.selected);
+                          setPendingQuestions(pendingQuestions.map(q => ({ ...q, selected: !allSelected })));
+                        }}
+                        className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition-all hover:bg-blue-100"
+                      >
+                        {pendingQuestions.every(q => q.selected) ? '取消全选' : '全选'}
+                      </button>
+                    )}
+                    <button
+                      onClick={handleConfirmAIQuestions}
+                      disabled={pendingQuestions.filter(q => q.selected).length === 0}
+                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      导入到当前清单
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-gray-400 font-medium">当前预制：{currentPresetTemplateLabel}</span>
+                )}
               </div>
 
-              <AnimatePresence>
-                {showManualAdd && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden border-b border-gray-100"
-                  >
-                    <div className="p-4 bg-blue-50/30">
-                      <div className="flex items-center gap-2">
-                        <input
-                          autoFocus
-                          type="text"
-                          value={newQuestionInput}
-                          onChange={(e) => setNewQuestionInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddManualQuestion()}
-                          placeholder="输入访谈问题..."
-                          className="flex-1 py-2 px-4 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
-                        />
-                        <button
-                          onClick={handleAddManualQuestion}
-                          disabled={!newQuestionInput.trim()}
-                          className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md shadow-blue-200"
-                        >
-                          添加
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {questionListMode === "default" && (
+                <>
+                  <AnimatePresence>
+                    {showManualAdd && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden border-b border-gray-100"
+                      >
+                        <div className="p-4 bg-blue-50/30">
+                          <div className="flex items-center gap-2">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={newQuestionInput}
+                              onChange={(e) => setNewQuestionInput(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddManualQuestion()}
+                              placeholder="输入访谈问题..."
+                              className="flex-1 py-2 px-4 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
+                            />
+                            <button
+                              onClick={handleAddManualQuestion}
+                              disabled={!newQuestionInput.trim()}
+                              className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md shadow-blue-200"
+                            >
+                              添加
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-              <div className="max-h-[600px] overflow-y-auto">
-                {(Object.entries(questions.reduce((acc, q) => {
-                  if (!acc[q.category]) acc[q.category] = [];
-                  acc[q.category].push(q);
-                  return acc;
-                }, {} as Record<string, typeof questions>)) as [string, typeof questions][]).map(([category, catQuestions], catIdx) => (
-                  <div key={category} className="border-b border-gray-50 last:border-0">
-                    <div className="bg-gray-50/50 px-6 py-2 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{category}</span>
-                      <span className="text-[10px] text-gray-400 font-medium">{catQuestions.length} 个问题</span>
-                    </div>
-                    <div className="divide-y divide-gray-50">
-                      {catQuestions.map((q, i) => {
-                        const globalIndex = questions.indexOf(q);
-                        return (
-                          <motion.div
-                            key={globalIndex}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.05 }}
-                            className="p-6 hover:bg-blue-50/30 transition-colors group relative"
-                          >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${q.source.includes('AI') ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                                    }`}>
-                                    {q.source}
-                                  </span>
-                                  {q.type === 'material' && (
-                                    <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-medium">
-                                      <Database size={10} />
-                                      关联资料
-                                    </span>
+                  <div className="max-h-[600px] overflow-y-auto">
+                    {isGeneratingAIInsights && (
+                      <div className="m-5 mb-0 rounded-[1.75rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-5 shadow-sm">
+                        <div className="flex items-start gap-4">
+                          <div className="relative mt-1 h-14 w-14 shrink-0 rounded-[1.25rem] bg-white text-blue-600 shadow-sm">
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                              className="absolute inset-0 rounded-[1.25rem] border-2 border-blue-100 border-t-blue-500 border-r-indigo-400"
+                            />
+                            <motion.div
+                              animate={{ scale: [0.92, 1.06, 0.92], opacity: [0.35, 0.8, 0.35] }}
+                              transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                              className="absolute inset-1 rounded-[1rem] bg-gradient-to-br from-blue-100/70 to-indigo-100/30"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Sparkles size={22} />
+                            </div>
+                            <motion.span
+                              animate={{ opacity: [0.2, 1, 0.2] }}
+                              transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
+                              className="absolute -right-1 top-1 h-2.5 w-2.5 rounded-full bg-blue-500"
+                            />
+                            <motion.span
+                              animate={{ opacity: [0.2, 1, 0.2] }}
+                              transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}
+                              className="absolute bottom-1 -left-1 h-2 w-2 rounded-full bg-indigo-400"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h3 className="text-base font-bold text-slate-900">AI洞察生成中</h3>
+                                <p className="mt-1 text-sm text-slate-500">正在后台生成补充问题，你可以继续编辑当前问题清单。</p>
+                              </div>
+                              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                                {Math.min(aiInsightLogs.length + 1, 4)}/4
+                              </span>
+                            </div>
+                            <div className="mt-4 h-2 overflow-hidden rounded-full bg-blue-100">
+                              <motion.div
+                                initial={{ width: "12%" }}
+                                animate={{ width: `${Math.min(((aiInsightLogs.length + 1) / 4) * 100, 100)}%` }}
+                                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
+                              />
+                            </div>
+                            <div className="mt-4 space-y-2">
+                              {aiInsightLogs.map((log, index) => (
+                                <motion.div
+                                  key={`${log}-${index}`}
+                                  initial={{ opacity: 0, x: -8 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  className="flex items-center gap-2 text-sm text-slate-600"
+                                >
+                                  <CheckCircle2 size={14} className="text-emerald-500" />
+                                  <span>{log}</span>
+                                </motion.div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {(Object.entries([...presetQuestions, ...activeQuestions].reduce((acc, q) => {
+                      if (!acc[q.category]) acc[q.category] = [];
+                      acc[q.category].push(q);
+                      return acc;
+                    }, {} as Record<string, InterviewQuestion[]>)) as [string, InterviewQuestion[]][]).map(([category, catQuestions]) => (
+                      <div key={category} className="border-b border-gray-50 last:border-0">
+                        <div className="bg-gray-50/50 px-6 py-2 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{category}</span>
+                          <span className="text-[10px] text-gray-400 font-medium">{catQuestions.length} 个问题</span>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                          {catQuestions.map((q, i) => {
+                            const globalIndex = questions.indexOf(q);
+                            const isPresetQuestion = globalIndex === -1;
+
+                            return (
+                              <motion.div
+                                key={`${category}-${i}-${q.question}`}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: i * 0.05 }}
+                                className="p-6 hover:bg-blue-50/30 transition-colors group relative"
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${q.source.includes('AI') ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                        {q.source}
+                                      </span>
+                                      {q.type === 'material' && (
+                                        <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-medium">
+                                          <Database size={10} />
+                                          关联资料
+                                        </span>
+                                      )}
+                                    </div>
+                                    {editingIndex === globalIndex ? (
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <textarea
+                                          autoFocus
+                                          rows={2}
+                                          value={editValue}
+                                          onChange={(e) => setEditValue(e.target.value)}
+                                          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && saveEdit()}
+                                          className="flex-1 py-2 px-3 border border-blue-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+                                        />
+                                        <div className="flex flex-col gap-1">
+                                          <button onClick={saveEdit} className="p-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm"><Check size={14} /></button>
+                                          <button onClick={() => setEditingIndex(null)} className="p-2 text-gray-400 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-sm"><X size={14} /></button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-gray-800 font-medium leading-relaxed">{q.question}</p>
+                                    )}
+                                  </div>
+                                  {!isPresetQuestion && (
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-4 top-6">
+                                      <button
+                                        onClick={() => startEditing(globalIndex, q.question)}
+                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-lg shadow-sm border border-transparent hover:border-gray-100 transition-all"
+                                        title="编辑问题"
+                                      >
+                                        <Edit3 size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteQuestion(globalIndex)}
+                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg shadow-sm border border-transparent hover:border-gray-100 transition-all"
+                                        title="删除问题"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
-                                {editingIndex === globalIndex ? (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <textarea
-                                      autoFocus
-                                      rows={2}
-                                      value={editValue}
-                                      onChange={(e) => setEditValue(e.target.value)}
-                                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && saveEdit()}
-                                      className="flex-1 py-2 px-3 border border-blue-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
-                                    />
-                                    <div className="flex flex-col gap-1">
-                                      <button onClick={saveEdit} className="p-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm"><Check size={14} /></button>
-                                      <button onClick={() => setEditingIndex(null)} className="p-2 text-gray-400 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-sm"><X size={14} /></button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-gray-800 font-medium leading-relaxed">{q.question}</p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-4 top-6">
-                                <button
-                                  onClick={() => startEditing(globalIndex, q.question)}
-                                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-lg shadow-sm border border-transparent hover:border-gray-100 transition-all"
-                                  title="编辑问题"
-                                >
-                                  <Edit3 size={14} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteQuestion(globalIndex)}
-                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg shadow-sm border border-transparent hover:border-gray-100 transition-all"
-                                  title="删除问题"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {questionListMode === "ai" && (
+                <div className="max-h-[600px] overflow-y-auto p-5">
+                  <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-blue-900">AI洞察问题清单</p>
+                        <p className="mt-1 text-sm text-blue-800">
+                          这里展示 AI 洞察生成的补充访谈问题，勾选后可一键导入到当前访谈问题清单。
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                          共 {pendingQuestions.length} 个问题
+                        </span>
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                          已选 {selectedAIQuestionCount} 个
+                        </span>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                  {isGeneratingAIInsights && (
+                    <div className="mb-5 rounded-[1.75rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-5 shadow-sm">
+                      <div className="flex items-start gap-4">
+                        <div className="relative mt-1 h-14 w-14 shrink-0 rounded-[1.25rem] bg-white text-blue-600 shadow-sm">
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-0 rounded-[1.25rem] border-2 border-blue-100 border-t-blue-500 border-r-indigo-400"
+                          />
+                          <motion.div
+                            animate={{ scale: [0.92, 1.06, 0.92], opacity: [0.35, 0.8, 0.35] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute inset-1 rounded-[1rem] bg-gradient-to-br from-blue-100/70 to-indigo-100/30"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Sparkles size={22} />
+                          </div>
+                          <motion.span
+                            animate={{ opacity: [0.2, 1, 0.2] }}
+                            transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
+                            className="absolute -right-1 top-1 h-2.5 w-2.5 rounded-full bg-blue-500"
+                          />
+                          <motion.span
+                            animate={{ opacity: [0.2, 1, 0.2] }}
+                            transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}
+                            className="absolute bottom-1 -left-1 h-2 w-2 rounded-full bg-indigo-400"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-base font-bold text-slate-900">AI洞察生成中</h3>
+                              <p className="mt-1 text-sm text-slate-500">正在把抓取结果转成可直接访谈的问题清单</p>
+                            </div>
+                            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                              {Math.min(aiInsightLogs.length + 1, 4)}/4
+                            </span>
+                          </div>
+                          <div className="mt-4 h-2 overflow-hidden rounded-full bg-blue-100">
+                            <motion.div
+                              initial={{ width: "12%" }}
+                              animate={{ width: `${Math.min(((aiInsightLogs.length + 1) / 4) * 100, 100)}%` }}
+                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
+                            />
+                          </div>
+                          <div className="mt-4 space-y-2">
+                            {aiInsightLogs.map((log, index) => (
+                              <motion.div
+                                key={`${log}-${index}`}
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-2 text-sm text-slate-600"
+                              >
+                                <CheckCircle2 size={14} className="text-emerald-500" />
+                                <span>{log}</span>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-4">
+                    {pendingQuestions.length > 0 ? (
+                      pendingQuestions.map((q, idx) => (
+                        <motion.div
+                          key={`${q.question}-${idx}`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          onClick={() => togglePendingQuestion(idx)}
+                          className={`p-5 border rounded-2xl flex items-start gap-4 transition-all cursor-pointer group relative overflow-hidden ${q.selected
+                            ? 'bg-blue-50/50 border-blue-300 shadow-sm ring-1 ring-blue-300'
+                            : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
+                            }`}
+                        >
+                          <div className={`mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-bold transition-all ${q.selected ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-blue-50 text-blue-600'
+                            }`}>
+                            {q.selected ? <Check size={20} /> : idx + 1}
+                          </div>
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider ${q.selected ? 'bg-blue-200 text-blue-800' : 'bg-blue-50 text-blue-600'
+                                  }`}>
+                                  AI洞察
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider ${q.selected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
+                                  }`}>
+                                  {q.category}
+                                </span>
+                              </div>
+                              <div className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${q.selected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                {q.selected ? '已选中' : '点击选中'}
+                              </div>
+                            </div>
+                            <p className={`text-base font-semibold leading-7 transition-colors ${q.selected ? 'text-blue-950' : 'text-gray-800'
+                              }`}>
+                              {q.question}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="rounded-full bg-purple-100 px-2.5 py-1 font-bold text-purple-700">
+                                {q.source}
+                              </span>
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
+                                {insightReasonMap[q.category] || "结合现有外部线索自动生成"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${q.selected ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-300 bg-white text-transparent'
+                            }`}>
+                            <Check size={14} />
+                          </div>
+                        </motion.div>
+                      ))
+                    ) : isGeneratingAIInsights ? null : (
+                      <div className="rounded-[1.75rem] border-2 border-dashed border-gray-100 p-12 text-center text-gray-400">
+                        <Sparkles size={40} className="mx-auto opacity-20" />
+                        <p className="mt-3 text-sm font-medium">暂未生成 AI 洞察问题</p>
+                        <button
+                          onClick={startAIInsightGeneration}
+                          className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-blue-700"
+                        >
+                          立即生成
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-center">
                 <button className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                  共 {questions.length} 个访谈问题
+                  {questionListMode === "ai"
+                    ? `共 ${pendingQuestions.length} 个 AI 洞察问题`
+                    : `共 ${questions.length} 个访谈问题`}
                 </button>
               </div>
             </div>
@@ -1699,18 +3316,18 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                   <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center text-amber-600 mx-auto">
                     <Clock size={40} />
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900">确认开始智能分析？</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">确认开始企业数据抓取？</h2>
                   <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-left space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="mt-1 text-blue-600"><Zap size={16} /></div>
                       <p className="text-sm text-slate-600 leading-relaxed">
-                        系统将启动全网数据抓取引擎，深度检索工商、司法、舆情及行业研报。
+                        系统将启动全网数据抓取引擎
                       </p>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="mt-1 text-amber-600"><AlertCircle size={16} /></div>
                       <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                        由于涉及大量实时数据处理与 AI 深度推理，<span className="text-amber-600 font-bold">整个过程预计需要 1-2 分钟</span>，请保持页面开启。
+                        由于涉及大量实时数据处理，<span className="text-amber-600 font-bold">整个过程预计需要 1-2 分钟</span>，请保持页面开启。
                       </p>
                     </div>
                   </div>
@@ -1742,6 +3359,113 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
             )}
           </AnimatePresence>
         )}
+
+        <AnimatePresence>
+          {showPresetTemplatePanel && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowPresetTemplatePanel(false)}
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 20 }}
+                className="relative w-full max-w-lg rounded-[1.75rem] bg-white p-6 shadow-2xl"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-900">选择问题清单</h3>
+                  <button
+                    onClick={() => setShowPresetTemplatePanel(false)}
+                    className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {questionCollections.map((template) => {
+                    const templateQuestions = template.questions || [];
+                    const isActive = currentPresetTemplate === template.id;
+
+                    return (
+                      <button
+                        key={template.id}
+                        onClick={() => handleSelectPresetTemplate(template.id)}
+                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${isActive ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200" : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
+                      >
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{template.title}</div>
+                          <div className="mt-1 text-xs text-slate-500">{templateQuestions.length} 个预制问题</div>
+                        </div>
+                        {isActive ? (
+                          <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white">
+                            当前
+                          </span>
+                        ) : (
+                          <ChevronRight size={16} className="text-slate-300" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showAIInsightToast && !isGeneratingAIInsights && (
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              className="fixed bottom-8 right-8 z-[120] w-[360px] rounded-3xl border border-blue-100 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(37,99,235,0.25)]"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
+                  <Sparkles size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">AI洞察已生成完成</h4>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">
+                        已生成 {pendingQuestions.length} 个补充问题，可直接导入访谈问题清单。
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowAIInsightToast(false)}
+                      className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => {
+                        setQuestionListMode("ai");
+                        setShowAIInsightToast(false);
+                      }}
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+                    >
+                      查看 AI洞察
+                    </button>
+                    <button
+                      onClick={() => setShowAIInsightToast(false)}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                    >
+                      稍后处理
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Internal Analysis Loading Modal */}
         <AnimatePresence>
@@ -1804,6 +3528,74 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
       </div>
 
       <AnimatePresence>
+        {showHeaderEditModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/35 px-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">修改表头信息</h3>
+                  <p className="mt-1 text-sm text-slate-500">可在这里调整尽调项目名称和企业名称。</p>
+                </div>
+                <button
+                  onClick={() => setShowHeaderEditModal(false)}
+                  className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700">项目名称</span>
+                  <input
+                    value={headerProjectNameInput}
+                    onChange={(event) => setHeaderProjectNameInput(event.target.value)}
+                    placeholder="请输入尽调项目名称"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700">企业名称</span>
+                  <input
+                    value={headerCompanyNameInput}
+                    onChange={(event) => setHeaderCompanyNameInput(event.target.value)}
+                    placeholder="请输入企业名称"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowHeaderEditModal(false)}
+                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveHeaderInfo}
+                  className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  保存
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {hasBackgroundResult && (
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -1816,7 +3608,7 @@ const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onSta
                 <Zap size={20} />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-bold text-gray-900">AI 自动智能分析已完成！</h4>
+                <h4 className="text-sm font-bold text-gray-900">企业数据抓取已完成！</h4>
                 <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                   系统已为您抓取该企业的全网数据并提炼深度线索，发现多项重要异常特征，建议立即查看。
                 </p>
@@ -2027,8 +3819,8 @@ const IntelligenceView = ({ onBack, onComplete, initialCompanyName = "", initial
               <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white mx-auto shadow-xl shadow-blue-200">
                 <BrainCircuit size={40} />
               </div>
-              <h2 className="text-3xl font-bold text-slate-900">新建 AI 智能分析</h2>
-              <p className="text-slate-500">输入企业信息，小狸将自动抓取全网数据，精准识别访谈重点并生成专业清单与建议</p>
+              <h2 className="text-3xl font-bold text-slate-900">新建企业数据抓取</h2>
+              <p className="text-slate-500">输入企业信息，小狸将自动抓取全网数据，用于补充企业外部信息与风险线索</p>
             </div>
 
             {/* Privacy Shield Banner */}
@@ -2161,18 +3953,18 @@ const IntelligenceView = ({ onBack, onComplete, initialCompanyName = "", initial
                   <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center text-amber-600 mx-auto">
                     <Clock size={40} />
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900">确认开始智能分析？</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">确认开始企业数据抓取？</h2>
                   <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-left space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="mt-1 text-blue-600"><Zap size={16} /></div>
                       <p className="text-sm text-slate-600 leading-relaxed">
-                        系统将启动全网数据抓取引擎，深度检索工商、司法、舆情及行业研报。
+                        系统将启动全网数据抓取引擎
                       </p>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="mt-1 text-amber-600"><AlertCircle size={16} /></div>
                       <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                        由于涉及大量实时数据处理与 AI 深度推理，<span className="text-amber-600 font-bold">整个过程预计需要 1-2 分钟</span>，请保持页面开启。
+                        由于涉及大量实时数据处理，<span className="text-amber-600 font-bold">整个过程预计需要 1-2 分钟</span>，请保持页面开启。
                       </p>
                     </div>
                   </div>
@@ -2324,7 +4116,7 @@ const IntelligenceView = ({ onBack, onComplete, initialCompanyName = "", initial
           <div>
             <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               {maskText(companyData.name)}
-              <span className="text-xs font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">AI 智能分析中</span>
+              <span className="text-xs font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">数据抓取中</span>
             </h1>
             <p className="text-xs text-gray-500">统一社会信用代码: {companyData.unifiedCode}</p>
           </div>
@@ -3256,18 +5048,70 @@ const EditReportView = ({
   onDownloadConflict,
   onDownloadTraceability,
   intelligenceResult,
+  initialSideTab,
+  templates,
+  setTemplates,
 }: {
   onBack: () => void,
   onDownload: () => void,
   onDownloadConflict: () => void,
   onDownloadTraceability: () => void,
-  intelligenceResult?: any
+  intelligenceResult?: any,
+  initialSideTab?: "conflict" | "traceability" | "templateRules",
+  templates: TemplateItem[],
+  setTemplates: React.Dispatch<React.SetStateAction<TemplateItem[]>>
 }) => {
   const projectName = intelligenceResult?.companyName || "A公司";
-  const [activeAuditTab, setActiveAuditTab] = useState<"conflict" | "traceability">("conflict");
+  const [activeAuditTab, setActiveAuditTab] = useState<"conflict" | "traceability" | "templateRules">(initialSideTab || "conflict");
   const editTargetRefs = useRef<Record<string, HTMLElement | null>>({});
   const [activeEditTargetId, setActiveEditTargetId] = useState<string | null>(null);
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewData | null>(null);
+  const templateUploadInputRef = useRef<HTMLInputElement>(null);
+  const templateUploadTimersRef = useRef<number[]>([]);
+  const [templateUploadStatus, setTemplateUploadStatus] = useState<"idle" | "uploading" | "parsing">("idle");
+  const [showWorkbenchTemplateSwitcher, setShowWorkbenchTemplateSwitcher] = useState(false);
+  const [workbenchActiveTemplateId, setWorkbenchActiveTemplateId] = useState<string | null>(
+    templates.find((item) => item.status === "enabled")?.id || templates[0]?.id || null,
+  );
+  const [templateConfirmModal, setTemplateConfirmModal] = useState<{
+    isOpen: boolean;
+    action: "enable" | "disable" | "delete" | null;
+    template: TemplateItem | null;
+  }>({ isOpen: false, action: null, template: null });
+  const [templateEditModal, setTemplateEditModal] = useState<{
+    isOpen: boolean;
+    template: TemplateItem | null;
+    name: string;
+    description: string;
+  }>({ isOpen: false, template: null, name: "", description: "" });
+  const [workbenchTemplatePreview, setWorkbenchTemplatePreview] = useState<TemplateItem | null>(null);
+  const [workbenchPreviewIsNew, setWorkbenchPreviewIsNew] = useState(false);
+
+  useEffect(() => {
+    if (initialSideTab) {
+      setActiveAuditTab(initialSideTab);
+    }
+  }, [initialSideTab]);
+
+  useEffect(() => {
+    return () => {
+      templateUploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!templates.length) {
+      setWorkbenchActiveTemplateId(null);
+      return;
+    }
+
+    const currentExists = templates.some((item) => item.id === workbenchActiveTemplateId);
+    if (currentExists) {
+      return;
+    }
+
+    setWorkbenchActiveTemplateId(templates.find((item) => item.status === "enabled")?.id || templates[0].id);
+  }, [templates, workbenchActiveTemplateId]);
   const [reportSections, setReportSections] = useState([
     {
       id: "company",
@@ -3579,6 +5423,92 @@ const EditReportView = ({
     );
   };
 
+  const currentWorkbenchTemplate =
+    templates.find((template) => template.id === workbenchActiveTemplateId) ||
+    templates.find((template) => template.status === "enabled") ||
+    templates[0] ||
+    null;
+
+  const openWorkbenchTemplate = (template: TemplateItem, isNew = false) => {
+    setWorkbenchTemplatePreview(template);
+    setWorkbenchPreviewIsNew(isNew);
+  };
+
+  const handleWorkbenchTemplateUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    templateUploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    templateUploadTimersRef.current = [];
+    setTemplateUploadStatus("uploading");
+
+    const uploadTimer = window.setTimeout(() => {
+      setTemplateUploadStatus("parsing");
+    }, 900);
+
+    const finishTimer = window.setTimeout(() => {
+      const now = new Date();
+      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const nextTemplate: TemplateItem = {
+        id: `tpl-${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, ""),
+        description: "新上传的自定义模板，请点击编辑补充模板描述。",
+        uploader: "当前用户",
+        uploadTime: formatted,
+        status: "enabled",
+      };
+      setTemplates((prev) => [nextTemplate, ...prev]);
+      setWorkbenchActiveTemplateId(nextTemplate.id);
+      setTemplateUploadStatus("idle");
+      event.target.value = "";
+      openWorkbenchTemplate(nextTemplate, true);
+    }, 2600);
+
+    templateUploadTimersRef.current.push(uploadTimer, finishTimer);
+  };
+
+  const executeWorkbenchTemplateAction = () => {
+    if (!templateConfirmModal.template || !templateConfirmModal.action) return;
+
+    if (templateConfirmModal.action === "delete") {
+      setTemplates((prev) => prev.filter((item) => item.id !== templateConfirmModal.template?.id));
+    } else {
+      setTemplates((prev) =>
+        prev.map((item) =>
+          item.id === templateConfirmModal.template?.id
+            ? { ...item, status: templateConfirmModal.action === "enable" ? "enabled" : "disabled" }
+            : item,
+        ),
+      );
+    }
+
+    setTemplateConfirmModal({ isOpen: false, action: null, template: null });
+  };
+
+  const handleSelectWorkbenchTemplate = (template: TemplateItem) => {
+    if (template.status !== "enabled") {
+      setTemplateConfirmModal({
+        isOpen: true,
+        action: "enable",
+        template,
+      });
+    }
+    setWorkbenchActiveTemplateId(template.id);
+    setShowWorkbenchTemplateSwitcher(false);
+  };
+
+  const saveWorkbenchTemplateEdit = () => {
+    if (!templateEditModal.template || !templateEditModal.name.trim()) return;
+    setTemplates((prev) =>
+      prev.map((item) =>
+        item.id === templateEditModal.template?.id
+          ? { ...item, name: templateEditModal.name.trim(), description: templateEditModal.description.trim() }
+          : item,
+      ),
+    );
+    setTemplateEditModal({ isOpen: false, template: null, name: "", description: "" });
+  };
+
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-gray-100">
       <header className="h-16 shrink-0 border-b border-gray-200 px-8 flex items-center justify-between sticky top-0 bg-white z-30">
@@ -3726,20 +5656,26 @@ const EditReportView = ({
           </div>
         </div>
 
-        <div className="hidden h-full min-h-0 w-[420px] shrink-0 border-l border-gray-200 bg-white xl:flex xl:flex-col">
+        <div className="hidden h-full min-h-0 w-[380px] shrink-0 border-l border-gray-200 bg-white lg:flex lg:flex-col xl:w-[420px]">
           <div className="border-b border-gray-100 px-6 py-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                <ClipboardCheck size={18} />
+                {activeAuditTab === "templateRules" ? <Settings size={18} /> : <ClipboardCheck size={18} />}
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-900">报告核查面板</h3>
-                <p className="text-[11px] text-gray-500">编辑时同步查看冲突与溯源结果</p>
+                <h3 className="text-sm font-bold text-gray-900">
+                  {activeAuditTab === "templateRules" ? "模板规则面板" : "报告核查面板"}
+                </h3>
+                <p className="text-[11px] text-gray-500">
+                  {activeAuditTab === "templateRules"
+                    ? "直接在工作台里调整模板规则，再重新生成报告"
+                    : "编辑时同步查看冲突与溯源结果"}
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="flex border-b border-gray-100">
+          <div className="grid grid-cols-3 border-b border-gray-100">
             <button
               onClick={() => setActiveAuditTab("conflict")}
               className={`relative flex-1 px-4 py-3 text-xs font-bold transition-colors ${
@@ -3762,10 +5698,121 @@ const EditReportView = ({
                 <motion.div layoutId="editAuditTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600" />
               )}
             </button>
+            <button
+              onClick={() => setActiveAuditTab("templateRules")}
+              className={`relative flex-1 px-4 py-3 text-xs font-bold transition-colors ${
+                activeAuditTab === "templateRules" ? "text-blue-600" : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              模板规则
+              {activeAuditTab === "templateRules" && (
+                <motion.div layoutId="editAuditTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+              )}
+            </button>
           </div>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
-            {activeAuditTab === "conflict" ? (
+            {activeAuditTab === "templateRules" ? (
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">模板规则</p>
+                  <p className="mt-2 text-sm leading-6 text-gray-700">
+                    这里保留工作台真正需要的模板能力。你可以切换当前模板、上传模板，并直接进入模板规则编辑。
+                  </p>
+                </div>
+
+                {currentWorkbenchTemplate ? (
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                            <FileText size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-gray-900">{currentWorkbenchTemplate.name}</p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                  currentWorkbenchTemplate.status === "enabled"
+                                    ? "bg-green-50 text-green-600"
+                                    : "bg-gray-100 text-gray-500"
+                                }`}
+                              >
+                                {currentWorkbenchTemplate.status === "enabled" ? "已启用" : "已禁用"}
+                              </span>
+                              <span className="text-[11px] text-gray-400">当前工作台模板</span>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-4 text-sm leading-6 text-gray-600">{currentWorkbenchTemplate.description}</p>
+                        <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-gray-400">
+                          <span className="flex items-center gap-1"><User size={12} />{currentWorkbenchTemplate.uploader}</span>
+                          <span className="flex items-center gap-1"><Clock size={12} />{currentWorkbenchTemplate.uploadTime}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
+                    <p className="text-sm font-bold text-gray-800">当前还没有可用模板</p>
+                    <p className="mt-2 text-xs text-gray-500">可以先上传模板，再回到工作台里编辑规则。</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    onClick={() => setShowWorkbenchTemplateSwitcher(true)}
+                    className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">切换模板</p>
+                      <p className="mt-1 text-xs text-gray-500">从“我的模板”已有模板中选择当前工作台使用的模板</p>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </button>
+                  <button
+                    onClick={() => currentWorkbenchTemplate && openWorkbenchTemplate(currentWorkbenchTemplate)}
+                    disabled={!currentWorkbenchTemplate}
+                    className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">编辑规则</p>
+                      <p className="mt-1 text-xs text-gray-500">进入当前模板的字段规则与全局逻辑配置</p>
+                    </div>
+                    <Edit3 size={16} className="text-blue-500" />
+                  </button>
+                  <button
+                    onClick={() => templateUploadInputRef.current?.click()}
+                    disabled={templateUploadStatus !== "idle"}
+                    className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">
+                        {templateUploadStatus === "uploading"
+                          ? "上传中..."
+                          : templateUploadStatus === "parsing"
+                            ? "解析中..."
+                            : "上传模板"}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">新增模板后可直接进入规则编辑</p>
+                    </div>
+                    {templateUploadStatus === "idle" ? (
+                      <Plus size={16} className="text-blue-500" />
+                    ) : (
+                      <RefreshCw size={16} className="animate-spin text-blue-500" />
+                    )}
+                  </button>
+                  <input
+                    ref={templateUploadInputRef}
+                    type="file"
+                    accept=".doc,.docx,.pdf,.txt"
+                    className="hidden"
+                    onChange={handleWorkbenchTemplateUpload}
+                  />
+                </div>
+              </div>
+            ) : activeAuditTab === "conflict" ? (
               <>
                 {conflicts.map((conflict, index) => (
                   <div
@@ -3864,6 +5911,219 @@ const EditReportView = ({
         onClose={() => setMaterialPreview(null)}
         onLocate={jumpToEditTarget}
       />
+
+      <AnimatePresence>
+        {showWorkbenchTemplateSwitcher && (
+          <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowWorkbenchTemplateSwitcher(false)}
+              className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative w-full max-w-xl rounded-[1.75rem] bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">选择工作台模板</h3>
+                  <p className="mt-1 text-sm text-slate-500">这里只切换当前报告工作台使用的模板，不会把整个“我的模板”页面搬进来。</p>
+                </div>
+                <button
+                  onClick={() => setShowWorkbenchTemplateSwitcher(false)}
+                  className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {templates.map((template) => {
+                  const isActive = template.id === currentWorkbenchTemplate?.id;
+                  return (
+                    <button
+                      key={template.id}
+                      onClick={() => handleSelectWorkbenchTemplate(template)}
+                      className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${
+                        isActive
+                          ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200"
+                          : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-bold text-slate-900">{template.name}</p>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              template.status === "enabled" ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {template.status === "enabled" ? "已启用" : "已禁用"}
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{template.description}</p>
+                      </div>
+                      {isActive ? (
+                        <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white">当前</span>
+                      ) : (
+                        <ChevronRight size={16} className="text-slate-300" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {templateUploadStatus !== "idle" && activeAuditTab === "templateRules" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-white/30 backdrop-blur-sm"
+          >
+            <div className="flex min-w-[260px] flex-col items-center gap-5 rounded-3xl bg-white px-8 py-8 shadow-xl">
+              <div className="relative flex h-16 w-16 items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+                <div className="absolute inset-0 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                {templateUploadStatus === "parsing" && <FileText size={24} className="text-blue-600" />}
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-800">{templateUploadStatus === "uploading" ? "正在上传..." : "正在解析..."}</p>
+                <p className="mt-1 text-sm text-gray-500">{templateUploadStatus === "uploading" ? "请稍候，文件传输中" : "AI 正在提取模板结构与内容"}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {templateConfirmModal.isOpen && templateConfirmModal.template && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 backdrop-blur-sm"
+          >
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${templateConfirmModal.action === "delete" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"}`}>
+                  <AlertCircle size={18} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {templateConfirmModal.action === "delete"
+                    ? "确认删除模板？"
+                    : templateConfirmModal.action === "enable"
+                      ? "确认启用模板？"
+                      : "确认禁用模板？"}
+                </h3>
+              </div>
+              <p className="mb-6 text-sm leading-6 text-gray-600">
+                {templateConfirmModal.action === "delete"
+                  ? `您确定要删除模板“${templateConfirmModal.template.name}”吗？此操作不可恢复。`
+                  : `您确定要${templateConfirmModal.action === "enable" ? "启用" : "禁用"}模板“${templateConfirmModal.template.name}”吗？`}
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setTemplateConfirmModal({ isOpen: false, action: null, template: null })}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={executeWorkbenchTemplateAction}
+                  className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${templateConfirmModal.action === "delete" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
+                >
+                  确认
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {templateEditModal.isOpen && templateEditModal.template && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 backdrop-blur-sm"
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <Edit3 size={18} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">编辑模板信息</h3>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">模板名称</label>
+                  <input
+                    value={templateEditModal.name}
+                    onChange={(event) => setTemplateEditModal((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="请输入模板名称"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">模板描述</label>
+                  <textarea
+                    value={templateEditModal.description}
+                    onChange={(event) => setTemplateEditModal((prev) => ({ ...prev, description: event.target.value }))}
+                    placeholder="请输入模板描述"
+                    className="h-24 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setTemplateEditModal({ isOpen: false, template: null, name: "", description: "" })}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveWorkbenchTemplateEdit}
+                  disabled={!templateEditModal.name.trim()}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {workbenchTemplatePreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-white"
+          >
+            <TemplatePreviewView
+              template={workbenchTemplatePreview}
+              isNew={workbenchPreviewIsNew}
+              onBack={() => {
+                setWorkbenchTemplatePreview(null);
+                setWorkbenchPreviewIsNew(false);
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
