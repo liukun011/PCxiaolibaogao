@@ -1,4 +1,4 @@
-export type KnowledgeDocument = {
+﻿export type KnowledgeDocument = {
   id: string;
   name: string;
   title: string;
@@ -14,6 +14,9 @@ export type KnowledgeDocument = {
   updatedAtLabel: string;
   parseStatus: 'success' | 'failed';
   parseError: string | null;
+  sourceKind?: 'file' | 'note' | 'interview';
+  content?: string;
+  duration?: string;
 };
 
 export type FolderNode = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+﻿import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   AlertCircle,
   BrainCircuit,
@@ -8,7 +8,9 @@ import {
   FileText,
   FolderPlus,
   FolderTree,
+  Pause,
   Pencil,
+  Play,
   Plus,
   Tag,
   Trash2,
@@ -34,6 +36,10 @@ type DocumentClassificationSectionProps = {
     summary: string;
     tags: string[];
     title?: string;
+    content?: string;
+    sourceKind?: KnowledgeDocument['sourceKind'];
+    duration?: string;
+    updatedAtLabel?: string;
   }>;
 };
 
@@ -49,11 +55,36 @@ type MergeDialogState = {
   fileIds: string[];
 };
 
+type NoteDialogState = {
+  mode: 'create' | 'edit';
+  fileId?: string;
+  content: string;
+};
+
 type FolderTreeNodeData = {
   name: string;
   path: string;
   children: FolderTreeNodeData[];
 };
+
+const DEFAULT_UPLOAD_FOLDER = '上传文件';
+const INTERVIEW_FOLDER = '访谈录音';
+const NOTE_FOLDER = '笔记';
+const DEFAULT_MATERIAL_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER];
+const DEFAULT_MOCK_TIMES = ['2026-04-18 09:32', '2026-04-18 10:16', '2026-04-18 11:05'];
+
+const getFolderOrder = (path: string) => {
+  const rootFolder = path.split('/').filter(Boolean)[0] ?? '';
+  const index = DEFAULT_MATERIAL_FOLDERS.indexOf(rootFolder);
+  return index === -1 ? DEFAULT_MATERIAL_FOLDERS.length : index;
+};
+
+const compareFolderPath = (left: string, right: string) => {
+  const orderDiff = getFolderOrder(left) - getFolderOrder(right);
+  return orderDiff !== 0 ? orderDiff : left.localeCompare(right, 'zh-CN');
+};
+
+const isDefaultMaterialFolder = (path: string) => DEFAULT_MATERIAL_FOLDERS.includes(path);
 
 const normalizeFolderPath = (path: string) =>
   path
@@ -99,7 +130,7 @@ const mergeFolderPaths = (...pathGroups: string[][]) =>
         .flatMap((path) => collectAncestorPaths(path))
         .filter(Boolean),
     ),
-  ).sort((left, right) => left.localeCompare(right, 'zh-CN'));
+  ).sort(compareFolderPath);
 
 const replacePathPrefix = (path: string, oldPrefix: string, newPrefix: string) => {
   if (path === oldPrefix) {
@@ -148,7 +179,7 @@ const buildFolderTreeData = (folderPaths: string[]): FolderTreeNodeData[] => {
         path: node.path,
         children: sortNodes(node.childrenMap),
       }))
-      .sort((left, right) => left.path.localeCompare(right.path, 'zh-CN'));
+      .sort((left, right) => compareFolderPath(left.path, right.path));
 
   return sortNodes(root);
 };
@@ -197,9 +228,12 @@ const normalizeInitialFiles = (files: DocumentClassificationSectionProps['initia
       segments: directoryPath.split('/'),
       folderDepth: directoryPath === DIRECTORY_PLACEHOLDER ? 0 : directoryPath.split('/').length,
       sizeLabel: '已归档',
-      updatedAtLabel: '历史资料',
+      updatedAtLabel: file.updatedAtLabel ?? DEFAULT_MOCK_TIMES[index % DEFAULT_MOCK_TIMES.length],
       parseStatus: 'success',
       parseError: null,
+      sourceKind: file.sourceKind ?? 'file',
+      content: file.content,
+      duration: file.duration,
     };
   }) satisfies KnowledgeDocument[];
 
@@ -354,7 +388,7 @@ export const DocumentClassificationSection = ({
   const initialDocuments = useMemo(() => normalizeInitialFiles(initialFiles), [initialFiles]);
   const [files, setFiles] = useState<KnowledgeDocument[]>(initialDocuments);
   const [folderPaths, setFolderPaths] = useState<string[]>(
-    mergeFolderPaths(initialDocuments.map((file) => file.directoryPath)),
+    mergeFolderPaths(DEFAULT_MATERIAL_FOLDERS, initialDocuments.map((file) => file.directoryPath)),
   );
   const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -370,10 +404,13 @@ export const DocumentClassificationSection = ({
   const [mergeDialog, setMergeDialog] = useState<MergeDialogState | null>(null);
   const [mergeTitleInput, setMergeTitleInput] = useState('');
   const [mergeDialogError, setMergeDialogError] = useState('');
+  const [noteDialog, setNoteDialog] = useState<NoteDialogState | null>(null);
+  const [noteDialogError, setNoteDialogError] = useState('');
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFolderRef = useRef(selectedFolder);
-  const currentUploadTargetRef = useRef<string>(DIRECTORY_PLACEHOLDER);
+  const currentUploadTargetRef = useRef<string>(DEFAULT_UPLOAD_FOLDER);
   const parseFailuresPopoverTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -394,7 +431,7 @@ export const DocumentClassificationSection = ({
     () =>
       folderPaths
         .filter((folderPath) => getParentPath(folderPath) === selectedFolder)
-        .sort((left, right) => left.localeCompare(right, 'zh-CN')),
+        .sort(compareFolderPath),
     [folderPaths, selectedFolder],
   );
   const currentFiles = useMemo(
@@ -404,9 +441,7 @@ export const DocumentClassificationSection = ({
       ),
     [groupedFiles, selectedFolder],
   );
-  const selectedFile =
-    files.find((file) => file.id === selectedFileId) ??
-    (currentFiles.length > 0 ? currentFiles[0] : null);
+  const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
   const breadcrumbs = useMemo(() => buildBreadcrumbs(selectedFolder), [selectedFolder]);
   const allCurrentFilesSelected =
     currentFiles.length > 0 && currentFiles.every((file) => selectedMergeIds.includes(file.id));
@@ -416,15 +451,10 @@ export const DocumentClassificationSection = ({
   );
 
   useEffect(() => {
-    if (!selectedFileId && currentFiles.length > 0) {
-      setSelectedFileId(currentFiles[0].id);
-      return;
-    }
-
     if (selectedFileId && !files.some((file) => file.id === selectedFileId)) {
-      setSelectedFileId(currentFiles[0]?.id ?? null);
+      setSelectedFileId(null);
     }
-  }, [currentFiles, files, selectedFileId]);
+  }, [files, selectedFileId]);
 
   useEffect(() => {
     setSelectedMergeIds((previous) =>
@@ -486,7 +516,7 @@ export const DocumentClassificationSection = ({
       setFolderPaths((previous) =>
         mergeFolderPaths(previous, uploadedFiles.map((file) => file.directoryPath)),
       );
-      setSelectedFileId(uploadedFiles[0]?.id ?? null);
+      setSelectedFileId(null);
     } catch (error) {
       console.error('Failed to process uploaded files in detail section:', error);
     } finally {
@@ -506,7 +536,7 @@ export const DocumentClassificationSection = ({
 
     appendUploadedFiles(
       selectedFiles,
-      currentFolder ? { sectionRoot: currentFolder } : {},
+      { sectionRoot: currentFolder || DEFAULT_UPLOAD_FOLDER },
       inputElement,
     );
   };
@@ -521,13 +551,13 @@ export const DocumentClassificationSection = ({
 
     appendUploadedFiles(
       selectedFiles,
-      { fallbackPath: currentUploadTargetRef.current || DIRECTORY_PLACEHOLDER },
+      { fallbackPath: currentUploadTargetRef.current || DEFAULT_UPLOAD_FOLDER },
       inputElement,
     );
   };
 
   const triggerSingleUpload = (path: string) => {
-    currentUploadTargetRef.current = path || DIRECTORY_PLACEHOLDER;
+    currentUploadTargetRef.current = path || DEFAULT_UPLOAD_FOLDER;
     const input = fileInputRef.current;
     if (!input) {
       return;
@@ -683,6 +713,99 @@ export const DocumentClassificationSection = ({
     setSelectedMergeIds((previous) => previous.filter((currentId) => currentId !== fileId));
   };
 
+  const toggleAudioPlayback = (fileId: string) => {
+    setPlayingAudioId((previous) => (previous === fileId ? null : fileId));
+  };
+
+  const createNote = () => {
+    setNoteDialog({
+      mode: 'create',
+      content: '',
+    });
+    setNoteDialogError('');
+  };
+
+  const editNote = (file: KnowledgeDocument) => {
+    setNoteDialog({
+      mode: 'edit',
+      fileId: file.id,
+      content: file.content ?? file.summary,
+    });
+    setNoteDialogError('');
+  };
+
+  const closeNoteDialog = () => {
+    setNoteDialog(null);
+    setNoteDialogError('');
+  };
+
+  const saveNoteDialog = () => {
+    if (!noteDialog) {
+      return;
+    }
+
+    const trimmedContent = noteDialog.content.trim();
+
+    if (!trimmedContent) {
+      setNoteDialogError('请输入笔记内容');
+      return;
+    }
+
+    const trimmedTitle =
+      trimmedContent
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean)
+        ?.slice(0, 24) || `笔记 ${formatUploadTime()}`;
+    const noteName = `${trimmedTitle}.note`;
+
+    if (noteDialog.mode === 'edit' && noteDialog.fileId) {
+      setFiles((previous) =>
+        previous.map((currentFile) =>
+          currentFile.id === noteDialog.fileId
+            ? {
+                ...currentFile,
+                title: trimmedTitle,
+                name: noteName,
+                summary: trimmedContent,
+                content: trimmedContent,
+                updatedAtLabel: formatUploadTime(),
+              }
+            : currentFile,
+        ),
+      );
+      closeNoteDialog();
+      return;
+    }
+
+    const nowLabel = formatUploadTime();
+    const nextNote: KnowledgeDocument = {
+      id: `note-${Date.now()}`,
+      name: noteName,
+      title: trimmedTitle,
+      type: '文本笔记',
+      summary: trimmedContent,
+      tags: ['笔记'],
+      extension: 'note',
+      directoryPath: NOTE_FOLDER,
+      relativePath: `${NOTE_FOLDER}/${noteName}`,
+      segments: [NOTE_FOLDER],
+      folderDepth: 1,
+      sizeLabel: '用户录入',
+      updatedAtLabel: nowLabel,
+      parseStatus: 'success',
+      parseError: null,
+      sourceKind: 'note',
+      content: trimmedContent,
+    };
+
+    setFiles((previous) => [...previous, nextNote]);
+    setFolderPaths((previous) => mergeFolderPaths(previous, [NOTE_FOLDER]));
+    setSelectedFolder(NOTE_FOLDER);
+    setSelectedFileId(nextNote.id);
+    closeNoteDialog();
+  };
+
   const reparseFailedFiles = () => {
     if (failedFiles.length === 0) {
       return;
@@ -814,6 +937,8 @@ export const DocumentClassificationSection = ({
         baseDirectoryPath === DIRECTORY_PLACEHOLDER ? 0 : baseDirectoryPath.split('/').length,
       sizeLabel: `${mergeFiles.length}项合并`,
       updatedAtLabel: uploadTimeLabel,
+      parseStatus: 'success',
+      parseError: null,
     };
 
     setFiles((previous) => [
@@ -878,7 +1003,7 @@ export const DocumentClassificationSection = ({
       />
 
       {hasMaterials ? (
-        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_320px]">
+        <div className={`grid gap-4 ${selectedFile ? 'xl:grid-cols-[220px_minmax(0,1fr)_320px]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
           <aside className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="max-h-[30rem] space-y-1 overflow-y-auto pr-1">
               {folderTree.map((node) => (
@@ -983,6 +1108,16 @@ export const DocumentClassificationSection = ({
                     <FileText size={13} />
                     合并文档
                   </button>
+                  {selectedFolder === NOTE_FOLDER && (
+                    <button
+                      type="button"
+                      onClick={createNote}
+                      className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100"
+                    >
+                      <Plus size={13} />
+                      添加笔记
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => openCreateFolderDialog(selectedFolder)}
@@ -994,7 +1129,7 @@ export const DocumentClassificationSection = ({
                   <UploadActionMenu
                     isUploading={isUploading}
                     buttonLabel="上传"
-                    onSingleUpload={() => triggerSingleUpload(selectedFolder || DIRECTORY_PLACEHOLDER)}
+                    onSingleUpload={() => triggerSingleUpload(selectedFolder || DEFAULT_UPLOAD_FOLDER)}
                     onDirectoryUpload={triggerDirectoryUpload}
                     buttonClassName="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700"
                   />
@@ -1031,20 +1166,24 @@ export const DocumentClassificationSection = ({
                         >
                           <Plus size={13} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openRenameFolderDialog(folderPath)}
-                          className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-blue-600"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteFolder(folderPath)}
-                          className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-red-600"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {!isDefaultMaterialFolder(folderPath) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openRenameFolderDialog(folderPath)}
+                              className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-blue-600"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteFolder(folderPath)}
+                              className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-red-600"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1116,7 +1255,9 @@ export const DocumentClassificationSection = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => renameFileTitle(file)}
+                            onClick={() =>
+                              file.sourceKind === 'note' ? editNote(file) : renameFileTitle(file)
+                            }
                             className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-blue-600"
                           >
                             <Pencil size={13} />
@@ -1141,23 +1282,15 @@ export const DocumentClassificationSection = ({
             </div>
           </div>
 
+          {selectedFile && (
           <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="text-xs font-bold uppercase tracking-wider text-gray-400">文件详情</div>
 
-            {selectedFile ? (
               <div className="mt-4 space-y-4">
                 <div>
                   <div className="text-lg font-bold text-gray-900">{selectedFile.title}</div>
                   <div className="mt-1 break-all text-xs text-gray-400">{selectedFile.name}</div>
                 </div>
-
-                <div className="rounded-xl border border-gray-100 bg-slate-50 p-3">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    上传时间
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-gray-700">{selectedFile.updatedAtLabel}</div>
-                </div>
-
                 <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
                   <div className="mb-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-800">
                     <BrainCircuit size={11} />
@@ -1165,6 +1298,60 @@ export const DocumentClassificationSection = ({
                   </div>
                   <p className="text-sm leading-6 text-gray-600">{selectedFile.summary}</p>
                 </div>
+
+                {selectedFile.sourceKind === 'interview' && (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleAudioPlayback(selectedFile.id)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700"
+                      >
+                        {playingAudioId === selectedFile.id ? <Pause size={16} /> : <Play size={16} />}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="h-2 overflow-hidden rounded-full bg-white">
+                          <div
+                            className={`h-full rounded-full bg-blue-600 transition-all ${
+                              playingAudioId === selectedFile.id ? 'w-2/3' : 'w-1/4'
+                            }`}
+                          />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-blue-700">
+                          <span>{playingAudioId === selectedFile.id ? '播放中' : '待播放'}</span>
+                          <span>{selectedFile.duration ?? '00:00'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(selectedFile.sourceKind === 'note' || selectedFile.sourceKind === 'interview') && (
+                  <div className="rounded-xl border border-gray-100 bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        {selectedFile.sourceKind === 'note' ? '笔记内容' : '录音转写'}
+                      </div>
+                      {selectedFile.sourceKind === 'note' && (
+                        <button
+                          type="button"
+                          onClick={() => editNote(selectedFile)}
+                          className="text-[10px] font-bold text-blue-600 hover:underline"
+                        >
+                          修改
+                        </button>
+                      )}
+                    </div>
+                    <p className="whitespace-pre-line text-sm leading-6 text-gray-700">
+                      {selectedFile.content || '暂无内容'}
+                    </p>
+                    {selectedFile.duration && (
+                      <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-gray-500">
+                        时长：{selectedFile.duration}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <div className="mb-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
@@ -1224,12 +1411,8 @@ export const DocumentClassificationSection = ({
                 </div>
 
               </div>
-            ) : (
-              <div className="mt-6 rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-8 text-center text-sm text-gray-400">
-                选择一个文件后，在这里查看摘要、标签和详情。
-              </div>
-            )}
           </aside>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-10 text-center shadow-sm">
@@ -1252,10 +1435,68 @@ export const DocumentClassificationSection = ({
             <UploadActionMenu
               isUploading={isUploading}
               buttonLabel="上传资料"
-              onSingleUpload={() => triggerSingleUpload(DIRECTORY_PLACEHOLDER)}
+              onSingleUpload={() => triggerSingleUpload(DEFAULT_UPLOAD_FOLDER)}
               onDirectoryUpload={triggerDirectoryUpload}
               buttonClassName="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
             />
+          </div>
+        </div>
+      )}
+
+      {noteDialog && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {noteDialog.mode === 'create' ? '添加笔记' : '修改笔记'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeNoteDialog}
+                className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <textarea
+                autoFocus
+                value={noteDialog.content}
+                onChange={(event) => {
+                  setNoteDialog((previous) =>
+                    previous ? { ...previous, content: event.target.value } : previous,
+                  );
+                  if (noteDialogError) {
+                    setNoteDialogError('');
+                  }
+                }}
+                placeholder="请输入笔记内容"
+                className="min-h-[260px] w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-7 text-gray-800 outline-none transition-all focus:border-blue-300 focus:bg-white"
+              />
+              {noteDialogError && (
+                <p className="text-xs font-medium text-red-500">{noteDialogError}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeNoteDialog}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={saveNoteDialog}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+              >
+                保存
+              </button>
+            </div>
           </div>
         </div>
       )}
