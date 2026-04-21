@@ -7354,7 +7354,7 @@ const EditReportView = ({
                   />
                 </label>
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
-                  保存后会同步到当前模板字段配置，后续报告生成将按数据来源和业务规则执行。
+                  保存后会将采用您制定的规则为这个项目生成新的模板，后续报告生成将按新的数据来源和业务规则执行。
                 </div>
               </div>
 
