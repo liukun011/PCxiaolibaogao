@@ -271,13 +271,27 @@ const UploadActionMenu = ({
   }, [isUploading]);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div
+      className="relative"
+      ref={menuRef}
+      onMouseEnter={() => {
+        if (!isUploading) {
+          setIsOpen(true);
+        }
+      }}
+      onMouseLeave={() => setIsOpen(false)}
+      onFocus={() => {
+        if (!isUploading) {
+          setIsOpen(true);
+        }
+      }}
+    >
       <button
         type="button"
         disabled={isUploading}
         onClick={() => {
           if (!isUploading) {
-            setIsOpen((previous) => !previous);
+            setIsOpen(true);
           }
         }}
         className={buttonClassName}
@@ -297,29 +311,31 @@ const UploadActionMenu = ({
       </button>
 
       {isOpen && !isUploading && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onSingleUpload();
-            }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
-          >
-            <FileText size={14} />
-            上传文件
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onDirectoryUpload();
-            }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
-          >
-            <FolderTree size={14} />
-            上传文件夹
-          </button>
+        <div className="absolute right-0 top-full z-20 w-44 pt-2">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onSingleUpload();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
+            >
+              <FileText size={14} />
+              上传文件
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onDirectoryUpload();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
+            >
+              <FolderTree size={14} />
+              上传文件夹
+            </button>
+          </div>
         </div>
       )}
     </div>
