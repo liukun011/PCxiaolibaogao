@@ -93,6 +93,259 @@ import {
   type QuestionCollection,
   type TemplateItem,
 } from "@/src/shared/templateData";
+
+type ReportGenerationStatus = "idle" | "generating" | "generated";
+
+type ReportGenerationTone = "info" | "success" | "warning";
+
+type ReportGenerationEvent = {
+  id: string;
+  stageId: string;
+  title: string;
+  summary: string;
+  source: string;
+  progress: number;
+  documentCount: number;
+  evidenceCount: number;
+  eta: string;
+  tone: ReportGenerationTone;
+};
+
+type ReportGenerationStage = {
+  id: string;
+  title: string;
+  description: string;
+  scope: string;
+  events: Omit<ReportGenerationEvent, "id" | "stageId">[];
+};
+
+type ReportGenerationFinding = {
+  id: string;
+  stageId: string;
+  severity: "高风险" | "中风险" | "低风险" | "待复核";
+  title: string;
+  summary: string;
+  source: string;
+  status: string;
+};
+
+const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
+  {
+    id: "prepare",
+    title: "文档准备",
+    description: "校验文件完整性，识别页码、目录、表格和影像质量。",
+    scope: "126 份资料",
+    events: [
+      {
+        title: "资料清单已锁定",
+        summary: "已接收财报、合同、流水、工商、访谈等 126 份资料，开始做格式与完整性检查。",
+        source: "文件管理 / 上传清单",
+        progress: 6,
+        documentCount: 8,
+        evidenceCount: 0,
+        eta: "约 8 分钟",
+        tone: "info",
+      },
+      {
+        title: "完成解析质量检查",
+        summary: "识别到 12 份扫描件需要 OCR，3 份 Excel 存在多工作表，已进入结构化解析队列。",
+        source: "OCR 引擎 / 表格解析",
+        progress: 14,
+        documentCount: 22,
+        evidenceCount: 6,
+        eta: "约 7 分钟",
+        tone: "success",
+      },
+    ],
+  },
+  {
+    id: "classification",
+    title: "文档分类",
+    description: "按尽调主题拆分材料，建立后续抽取和交叉验证索引。",
+    scope: "7 类资料",
+    events: [
+      {
+        title: "完成资料主题归档",
+        summary: "已将资料归入财务、合同、法务、股权、经营、人事、访谈 7 个主题，并标记关键页。",
+        source: "文档分类模型",
+        progress: 24,
+        documentCount: 41,
+        evidenceCount: 18,
+        eta: "约 6 分钟",
+        tone: "success",
+      },
+      {
+        title: "识别缺口材料",
+        summary: "银行流水缺少 2024 年 9 月明细，部分销售合同缺验收附件，已加入复核清单。",
+        source: "文件完整性规则",
+        progress: 32,
+        documentCount: 56,
+        evidenceCount: 27,
+        eta: "约 5 分钟",
+        tone: "warning",
+      },
+    ],
+  },
+  {
+    id: "extraction",
+    title: "关键信息抽取",
+    description: "抽取主体、财务指标、重大合同、诉讼、担保和访谈事实。",
+    scope: "42 个字段",
+    events: [
+      {
+        title: "完成主体与股权信息抽取",
+        summary: "已提取企业名称、注册资本、实控人、股权变更记录，并与工商材料建立引用关系。",
+        source: "工商登记信息 / 股权变更记录",
+        progress: 43,
+        documentCount: 68,
+        evidenceCount: 44,
+        eta: "约 4 分钟",
+        tone: "success",
+      },
+      {
+        title: "完成财务指标抽取",
+        summary: "已提取收入、净利润、经营现金流、应收账款、毛利率等核心指标，发现 2 项波动异常。",
+        source: "2024 财务报表 / 明细账",
+        progress: 54,
+        documentCount: 81,
+        evidenceCount: 63,
+        eta: "约 3 分钟",
+        tone: "warning",
+      },
+    ],
+  },
+  {
+    id: "risk",
+    title: "风险识别",
+    description: "识别财务、合同、合规、股权和经营依赖风险。",
+    scope: "18 条线索",
+    events: [
+      {
+        title: "识别收入与回款风险",
+        summary: "应收账款增长快于收入增长，回款周期较上一期拉长，已标记为中高风险线索。",
+        source: "财务报表 / 银行流水 / 销售台账",
+        progress: 66,
+        documentCount: 94,
+        evidenceCount: 82,
+        eta: "约 2 分钟",
+        tone: "warning",
+      },
+      {
+        title: "识别合同履约风险",
+        summary: "部分大额合同签署时间接近报告期末，且缺少验收单或物流凭证，待交叉验证。",
+        source: "销售合同 / 验收附件",
+        progress: 74,
+        documentCount: 105,
+        evidenceCount: 97,
+        eta: "约 2 分钟",
+        tone: "warning",
+      },
+    ],
+  },
+  {
+    id: "verification",
+    title: "交叉验证",
+    description: "对金额、时间、主体和结论做多来源校验。",
+    scope: "31 组校验",
+    events: [
+      {
+        title: "完成财务口径交叉验证",
+        summary: "合同金额、销售台账和收入确认口径存在 2 处差异，已生成冲突标记。",
+        source: "合同台账 / 财报 / 销售明细",
+        progress: 84,
+        documentCount: 116,
+        evidenceCount: 121,
+        eta: "约 1 分钟",
+        tone: "warning",
+      },
+      {
+        title: "完成来源引用校验",
+        summary: "报告草稿中 36 处关键结论已匹配到原始材料页码或访谈时间戳。",
+        source: "证据链索引",
+        progress: 91,
+        documentCount: 126,
+        evidenceCount: 145,
+        eta: "约 40 秒",
+        tone: "success",
+      },
+    ],
+  },
+  {
+    id: "drafting",
+    title: "报告撰写",
+    description: "套用当前模板，生成章节草稿、风险摘要和引用来源。",
+    scope: "8 个章节",
+    events: [
+      {
+        title: "生成报告章节草稿",
+        summary: "已生成企业基本情况、经营分析、财务分析、风险提示和尽调结论等章节。",
+        source: "授信调查报告模板",
+        progress: 96,
+        documentCount: 126,
+        evidenceCount: 156,
+        eta: "约 20 秒",
+        tone: "success",
+      },
+      {
+        title: "完成质量检查",
+        summary: "已检查引用存在性、数字前后一致性和未处理文档，4 项内容建议人工复核。",
+        source: "质量检查规则",
+        progress: 100,
+        documentCount: 126,
+        evidenceCount: 162,
+        eta: "已完成",
+        tone: "success",
+      },
+    ],
+  },
+];
+
+const REPORT_GENERATION_EVENTS: ReportGenerationEvent[] = REPORT_GENERATION_STAGES.flatMap((stage) =>
+  stage.events.map((event, index) => ({
+    ...event,
+    id: `${stage.id}-${index}`,
+    stageId: stage.id,
+  })),
+);
+
+const REPORT_GENERATION_FINDINGS: ReportGenerationFinding[] = [
+  {
+    id: "receivable-risk",
+    stageId: "risk",
+    severity: "高风险",
+    title: "应收账款回款周期异常",
+    summary: "应收账款周转天数由 90 天延长至 125 天，且增速高于收入增速。",
+    source: "2024 财务报表，第 12 页；销售台账汇总.xlsx",
+    status: "已纳入风险章节",
+  },
+  {
+    id: "contract-proof",
+    stageId: "risk",
+    severity: "中风险",
+    title: "部分合同缺少验收凭证",
+    summary: "3 笔期末大额合同暂未匹配到完整验收单或物流签收记录。",
+    source: "销售合同_2024_Q4.pdf；验收附件清单",
+    status: "待人工复核",
+  },
+  {
+    id: "equity-change",
+    stageId: "verification",
+    severity: "待复核",
+    title: "股权变更口径不一致",
+    summary: "工商变更记录显示近一年存在股权调整，访谈口径称无重大变动。",
+    source: "工商变更记录.pdf；管理层访谈转写",
+    status: "已生成冲突标记",
+  },
+  {
+    id: "citation-check",
+    stageId: "drafting",
+    severity: "低风险",
+    title: "引用来源完整性检查完成",
+    summary: "36 处关键结论已绑定证据来源，4 处建议在提交前补充原始材料。",
+    source: "报告质量检查规则",
+    status: "已写入质检结果",
+  },
+];
 export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, onOpenTemplates, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult, initialSection, onSectionHandled, questionCollections, setQuestionCollections, templates, onPreviewTemplate }: {
   onBack: () => void,
   onEdit: () => void,
@@ -236,8 +489,15 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [showTemplateSwitchModal, setShowTemplateSwitchModal] = useState(false);
   const [showReportActionMenu, setShowReportActionMenu] = useState(false);
   const [showCompanyDataActionMenu, setShowCompanyDataActionMenu] = useState(false);
-  const [reportGenerationStatus, setReportGenerationStatus] = useState<"idle" | "generating" | "generated">(
+  const [reportGenerationStatus, setReportGenerationStatus] = useState<ReportGenerationStatus>(
     intelligenceResult?.reportGenerated ? "generated" : "idle",
+  );
+  const [showReportGenerationPanel, setShowReportGenerationPanel] = useState(false);
+  const [reportGenerationEvents, setReportGenerationEvents] = useState<ReportGenerationEvent[]>(
+    intelligenceResult?.reportGenerated ? REPORT_GENERATION_EVENTS : [],
+  );
+  const [reportGenerationStepIndex, setReportGenerationStepIndex] = useState(
+    intelligenceResult?.reportGenerated ? REPORT_GENERATION_EVENTS.length - 1 : -1,
   );
   const [selectedReportTemplateId, setSelectedReportTemplateId] = useState(
     intelligenceResult?.reportTemplateId || templates.find((template) => template.status === "enabled")?.id || templates[0]?.id || "",
@@ -253,7 +513,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     return () => {
       aiInsightTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       if (reportGenerationTimerRef.current) {
-        window.clearTimeout(reportGenerationTimerRef.current);
+        window.clearInterval(reportGenerationTimerRef.current);
       }
     };
   }, []);
@@ -513,19 +773,52 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const startReportGeneration = () => {
     setShowReportActionMenu(false);
     if (reportGenerationTimerRef.current) {
-      window.clearTimeout(reportGenerationTimerRef.current);
+      window.clearInterval(reportGenerationTimerRef.current);
+      reportGenerationTimerRef.current = null;
     }
 
     setReportGenerationStatus("generating");
-    reportGenerationTimerRef.current = window.setTimeout(() => {
-      setReportGenerationStatus("generated");
-      setIntelligenceResult((prev: any) => ({
-        ...(prev || {}),
-        reportGenerated: true,
-        reportGeneratedAt: new Date().toLocaleString("zh-CN"),
-      }));
+    setShowReportGenerationPanel(true);
+    setReportGenerationEvents([REPORT_GENERATION_EVENTS[0]]);
+    setReportGenerationStepIndex(0);
+
+    let nextEventIndex = 1;
+    reportGenerationTimerRef.current = window.setInterval(() => {
+      if (nextEventIndex >= REPORT_GENERATION_EVENTS.length) {
+        if (reportGenerationTimerRef.current) {
+          window.clearInterval(reportGenerationTimerRef.current);
+          reportGenerationTimerRef.current = null;
+        }
+
+        setReportGenerationStatus("generated");
+        setReportGenerationStepIndex(REPORT_GENERATION_EVENTS.length - 1);
+        setReportGenerationEvents(REPORT_GENERATION_EVENTS);
+        setIntelligenceResult((prev: any) => ({
+          ...(prev || {}),
+          reportGenerated: true,
+          reportGeneratedAt: new Date().toLocaleString("zh-CN"),
+          reportGenerationAudit: REPORT_GENERATION_EVENTS,
+        }));
+        return;
+      }
+
+      const nextEvent = REPORT_GENERATION_EVENTS[nextEventIndex];
+      setReportGenerationEvents((previous) => [...previous, nextEvent]);
+      setReportGenerationStepIndex(nextEventIndex);
+      nextEventIndex += 1;
+    }, 900);
+  };
+
+  const cancelReportGeneration = () => {
+    if (reportGenerationTimerRef.current) {
+      window.clearInterval(reportGenerationTimerRef.current);
       reportGenerationTimerRef.current = null;
-    }, 1200);
+    }
+
+    setReportGenerationStatus("idle");
+    setShowReportGenerationPanel(false);
+    setReportGenerationEvents([]);
+    setReportGenerationStepIndex(-1);
   };
 
   const openGeneratedReport = () => {
@@ -672,6 +965,18 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     setShowCompanyDataActionMenu(false);
     setShowIntelligenceModal(true);
   };
+  const currentReportEvent =
+    reportGenerationEvents[reportGenerationEvents.length - 1] ||
+    (reportGenerationStatus === "generated" ? REPORT_GENERATION_EVENTS[REPORT_GENERATION_EVENTS.length - 1] : null);
+  const currentReportStageId = currentReportEvent?.stageId || REPORT_GENERATION_STAGES[0].id;
+  const currentReportStageIndex = Math.max(
+    0,
+    REPORT_GENERATION_STAGES.findIndex((stage) => stage.id === currentReportStageId),
+  );
+  const visibleReportFindings = REPORT_GENERATION_FINDINGS.filter((finding) => {
+    const findingStageIndex = REPORT_GENERATION_STAGES.findIndex((stage) => stage.id === finding.stageId);
+    return reportGenerationStatus === "generated" || findingStageIndex <= currentReportStageIndex;
+  });
 
   return (
     <>
@@ -744,11 +1049,16 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 </button>
               ) : (
                 <button
-                  onClick={startReportGeneration}
-                  disabled={reportGenerationStatus === "generating"}
+                  onClick={() => {
+                    if (reportGenerationStatus === "generating") {
+                      setShowReportGenerationPanel(true);
+                      return;
+                    }
+                    startReportGeneration();
+                  }}
                   className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
                     reportGenerationStatus === "generating"
-                      ? "cursor-not-allowed border border-blue-100 bg-blue-50 text-blue-600 opacity-80"
+                      ? "border border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100"
                       : "bg-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700"
                   }`}
                 >
@@ -757,13 +1067,23 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                   ) : (
                     <Sparkles size={16} />
                   )}
-                  <span>{reportGenerationStatus === "generating" ? "报告生成中" : "生成报告"}</span>
+                  <span>{reportGenerationStatus === "generating" ? "查看进度" : "生成报告"}</span>
                 </button>
               )}
 
               {reportGenerationStatus === "generated" && showReportActionMenu && (
                 <div className="absolute right-0 top-full z-30 w-48 pt-2">
                   <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white py-2 shadow-xl">
+                    <button
+                      onClick={() => {
+                        setShowReportActionMenu(false);
+                        setShowReportGenerationPanel(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      <Activity size={15} />
+                      <span>查看生成过程</span>
+                    </button>
                     <button
                       onClick={openGeneratedReport}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
@@ -1463,7 +1783,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                         <Sparkles size={40} className="mx-auto opacity-20" />
                         <p className="mt-3 text-sm font-medium">暂未生成 AI 洞察问题</p>
                         <button
-                          onClick={startAIInsightGeneration}
+                          onClick={() => startAIInsightGeneration()}
                           className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-blue-700"
                         >
                           立即生成
@@ -1718,6 +2038,56 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
       </div>
 
       <AnimatePresence>
+        {reportGenerationStatus === "generating" && !showReportGenerationPanel && currentReportEvent && (
+          <motion.button
+            type="button"
+            onClick={() => setShowReportGenerationPanel(true)}
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            className="fixed bottom-8 right-8 z-[120] w-[360px] rounded-3xl border border-blue-100 bg-white p-4 text-left shadow-[0_16px_48px_-12px_rgba(37,99,235,0.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_56px_-12px_rgba(37,99,235,0.34)]"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-100">
+                <RefreshCw size={18} className="animate-spin" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="truncate text-sm font-bold text-slate-900">报告后台生成中</h4>
+                  <span className="shrink-0 text-xs font-black text-blue-600">{currentReportEvent.progress}%</span>
+                </div>
+                <p className="mt-1 line-clamp-1 text-xs text-slate-500">{currentReportEvent.title}</p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <motion.div
+                    animate={{ width: `${currentReportEvent.progress}%` }}
+                    transition={{ duration: 0.35 }}
+                    className="h-full rounded-full bg-blue-600"
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400">
+                  <span>{currentReportEvent.documentCount} / 126 份文档</span>
+                  <span>点击查看过程</span>
+                </div>
+              </div>
+            </div>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <ReportGenerationWorkbench
+        open={showReportGenerationPanel}
+        status={reportGenerationStatus}
+        events={reportGenerationEvents}
+        currentStageId={currentReportStageId}
+        currentStepIndex={reportGenerationStepIndex}
+        findings={visibleReportFindings}
+        onClose={() => setShowReportGenerationPanel(false)}
+        onCancel={cancelReportGeneration}
+        onOpenReport={openGeneratedReport}
+        onDownload={downloadGeneratedReport}
+      />
+
+      <AnimatePresence>
         {showHeaderEditModal && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -1951,6 +2321,330 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         )}
       </AnimatePresence>
     </>
+  );
+};
+
+const ReportGenerationWorkbench = ({
+  open,
+  status,
+  events,
+  currentStageId,
+  currentStepIndex,
+  findings,
+  onClose,
+  onCancel,
+  onOpenReport,
+  onDownload,
+}: {
+  open: boolean;
+  status: ReportGenerationStatus;
+  events: ReportGenerationEvent[];
+  currentStageId: string;
+  currentStepIndex: number;
+  findings: ReportGenerationFinding[];
+  onClose: () => void;
+  onCancel: () => void;
+  onOpenReport: () => void;
+  onDownload: () => void;
+}) => {
+  const latestEvent =
+    events[events.length - 1] ||
+    (status === "generated" ? REPORT_GENERATION_EVENTS[REPORT_GENERATION_EVENTS.length - 1] : REPORT_GENERATION_EVENTS[0]);
+  const activeStageIndex = Math.max(
+    0,
+    REPORT_GENERATION_STAGES.findIndex((stage) => stage.id === currentStageId),
+  );
+  const progress = status === "generated" ? 100 : latestEvent.progress;
+  const processedDocuments = status === "generated" ? 126 : latestEvent.documentCount;
+  const evidenceCount = status === "generated" ? 162 : latestEvent.evidenceCount;
+  const eta = status === "generated" ? "已完成" : latestEvent.eta;
+  const visibleEvents = events.length > 0 ? events : [REPORT_GENERATION_EVENTS[0]];
+  const currentStage = REPORT_GENERATION_STAGES[activeStageIndex] || REPORT_GENERATION_STAGES[0];
+
+  const getStageState = (stageId: string, index: number) => {
+    if (status === "generated" || index < activeStageIndex) return "done";
+    if (stageId === currentStageId) return "active";
+    return "pending";
+  };
+
+  const getToneClass = (tone: ReportGenerationTone) => {
+    if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-700";
+    if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  };
+
+  const getSeverityClass = (severity: ReportGenerationFinding["severity"]) => {
+    if (severity === "高风险") return "bg-red-50 text-red-600 border-red-100";
+    if (severity === "中风险") return "bg-amber-50 text-amber-700 border-amber-100";
+    if (severity === "待复核") return "bg-purple-50 text-purple-600 border-purple-100";
+    return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  };
+
+  const formatRuntime = (index: number) => {
+    const seconds = index * 18;
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[130] bg-slate-950/45 p-4 backdrop-blur-sm md:p-6"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="mx-auto flex h-[calc(100vh-2rem)] max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl md:h-[calc(100vh-3rem)]"
+          >
+            <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-100">
+                    {status === "generated" ? <CheckCircle2 size={20} /> : <Sparkles size={20} />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-base font-bold text-slate-900">尽调报告生成过程</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      展示 AI 处理摘要、证据来源和阶段性发现，便于跟踪与复核。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {status === "generating" ? (
+                  <>
+                    <button
+                      onClick={onClose}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                    >
+                      <Clock size={14} />
+                      <span>后台生成</span>
+                    </button>
+                    <button
+                      onClick={onCancel}
+                      className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-xs font-bold text-red-600 transition-colors hover:bg-red-100"
+                    >
+                      <X size={14} />
+                      <span>取消生成</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={onOpenReport}
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+                    >
+                      <Eye size={14} />
+                      <span>查看报告</span>
+                    </button>
+                    <button
+                      onClick={onDownload}
+                      className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-100"
+                    >
+                      <Download size={14} />
+                      <span>下载报告</span>
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
+                      aria-label="关闭报告生成过程"
+                    >
+                      <X size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="shrink-0 border-b border-slate-100 bg-slate-50/70 px-5 py-4 md:px-6">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400">整体进度</span>
+                    <span className="text-sm font-black text-blue-600">{progress}%</span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <motion.div
+                      animate={{ width: `${progress}%` }}
+                      transition={{ duration: 0.35 }}
+                      className="h-full rounded-full bg-blue-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-bold text-slate-400">当前阶段</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    {status === "generating" && <RefreshCw size={14} className="shrink-0 animate-spin text-blue-600" />}
+                    {status === "generated" && <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />}
+                    <span className="truncate text-sm font-bold text-slate-900">{currentStage.title}</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-bold text-slate-400">资料处理</p>
+                  <p className="mt-2 text-sm font-bold text-slate-900">{processedDocuments} / 126 份文档</p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-bold text-slate-400">证据与剩余时间</p>
+                  <p className="mt-2 text-sm font-bold text-slate-900">{evidenceCount} 条证据 · {eta}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
+              <aside className="border-b border-slate-100 bg-white p-5 lg:border-b-0 lg:border-r lg:p-6">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  <ClipboardCheck size={16} className="text-blue-600" />
+                  <span>阶段路线</span>
+                </div>
+                <div className="mt-5 space-y-3">
+                  {REPORT_GENERATION_STAGES.map((stage, index) => {
+                    const state = getStageState(stage.id, index);
+                    return (
+                      <div key={stage.id} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${
+                              state === "done"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                                : state === "active"
+                                  ? "border-blue-200 bg-blue-600 text-white shadow-lg shadow-blue-100"
+                                  : "border-slate-200 bg-slate-50 text-slate-400"
+                            }`}
+                          >
+                            {state === "done" ? <Check size={14} /> : index + 1}
+                          </div>
+                          {index < REPORT_GENERATION_STAGES.length - 1 && (
+                            <div className={`mt-2 h-8 w-px ${state === "done" ? "bg-emerald-200" : "bg-slate-200"}`} />
+                          )}
+                        </div>
+                        <div className="min-w-0 pb-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <p className={`truncate text-sm font-bold ${state === "pending" ? "text-slate-500" : "text-slate-900"}`}>
+                              {stage.title}
+                            </p>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                              {stage.scope}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">{stage.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="flex items-start gap-2">
+                    <Info size={15} className="mt-0.5 shrink-0 text-blue-600" />
+                    <p className="text-xs leading-5 text-blue-800">
+                      这里展示的是可复核的处理摘要和证据链，不展示模型原始思维链。
+                    </p>
+                  </div>
+                </div>
+              </aside>
+
+              <section className="min-h-0 overflow-y-auto p-5 lg:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-slate-900">实时处理摘要</h4>
+                    <p className="mt-1 text-xs text-slate-500">每完成一个处理动作，系统会输出摘要、来源和当前指标。</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-500">
+                    步骤 {Math.max(currentStepIndex + 1, 1)} / {REPORT_GENERATION_EVENTS.length}
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {visibleEvents.map((event, index) => {
+                    const isLatest = index === visibleEvents.length - 1 && status === "generating";
+                    const stage = REPORT_GENERATION_STAGES.find((item) => item.id === event.stageId);
+                    return (
+                      <motion.div
+                        key={event.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`rounded-2xl border p-4 transition-all ${
+                          isLatest ? "border-blue-200 bg-blue-50/40 shadow-sm" : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                              T+{formatRuntime(index)}
+                            </span>
+                            <span className="truncate text-xs font-bold text-blue-600">{stage?.title || "处理中"}</span>
+                          </div>
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${getToneClass(event.tone)}`}>
+                            {event.tone === "warning" ? "需关注" : event.tone === "success" ? "已完成" : "处理中"}
+                          </span>
+                        </div>
+                        <h5 className="mt-3 text-sm font-bold text-slate-900">{event.title}</h5>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{event.summary}</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Database size={13} className="text-slate-400" />
+                            {event.source}
+                          </span>
+                          <span>{event.documentCount} 份文档</span>
+                          <span>{event.evidenceCount} 条证据</span>
+                          <span>{event.progress}%</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <aside className="border-t border-slate-100 bg-slate-50/70 p-5 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">阶段性发现</h4>
+                    <p className="mt-1 text-xs text-slate-500">边生成边沉淀风险、缺口和质检结果。</p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 shadow-sm">
+                    {findings.length} 条
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {findings.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center">
+                      <Target size={20} className="mx-auto text-slate-300" />
+                      <p className="mt-3 text-xs leading-5 text-slate-500">风险识别阶段开始后，将在这里展示阶段性发现。</p>
+                    </div>
+                  ) : (
+                    findings.map((finding) => (
+                      <div key={finding.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${getSeverityClass(finding.severity)}`}>
+                            {finding.severity}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">{finding.status}</span>
+                        </div>
+                        <h5 className="mt-3 text-sm font-bold text-slate-900">{finding.title}</h5>
+                        <p className="mt-2 text-xs leading-5 text-slate-600">{finding.summary}</p>
+                        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">
+                          来源：{finding.source}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </aside>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

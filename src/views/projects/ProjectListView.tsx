@@ -283,7 +283,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
           {projects.map((project) => (
             <motion.div
               key={project.id}
-              whileHover={{ y: -4, shadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}
+              whileHover={{ y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}
               onClick={() => onSelectProject(project)}
               className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm cursor-pointer flex gap-4 group"
             >

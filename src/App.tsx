@@ -131,7 +131,7 @@ export default function App() {
     })),
   );
   const [intelligenceSource, setIntelligenceSource] = useState<"projectList" | "dashboard">("projectList");
-  const [intelligenceInitialStep, setIntelligenceInitialStep] = useState<"input" | "confirm" | "loading" | "results">("input");
+  const [intelligenceInitialStep, setIntelligenceInitialStep] = useState<"input" | "confirm" | "loading" | "result">("input");
   const [intelligenceResult, setIntelligenceResult] = useState<any>(() =>
     requestedView === "dashboard"
       ? {
