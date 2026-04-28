@@ -94,6 +94,17 @@ import {
   type QuestionCollection,
   type TemplateItem,
 } from "@/src/shared/templateData";
+
+type ReportBlockConfig = {
+  id: string;
+  name: string;
+  section: string;
+  dataSource: string;
+  extractionRule: string;
+  businessRule: string;
+  sourceFiles: Array<{ name: string; detail: string }>;
+};
+
 export const EditReportView = ({
   onBack,
   onDownload,
@@ -228,8 +239,83 @@ export const EditReportView = ({
     dataSource: string;
     businessRule: string;
   }>({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "" });
+  const [reportBlockRuleModal, setReportBlockRuleModal] = useState<{
+    isOpen: boolean;
+    blockId: string;
+    fieldName: string;
+    extractionRule: string;
+    businessRule: string;
+  }>({ isOpen: false, blockId: "", fieldName: "", extractionRule: "", businessRule: "" });
   const [selectedGeneratedFieldId, setSelectedGeneratedFieldId] = useState<string | null>(null);
+  const [selectedReportBlockId, setSelectedReportBlockId] = useState<string | null>(null);
   const [manualReportFieldContents, setManualReportFieldContents] = useState<Record<string, string>>({});
+  const [reportBlockConfigs, setReportBlockConfigs] = useState<Record<string, ReportBlockConfig>>(() => ({
+    schemeTable: {
+      id: "schemeTable",
+      name: "报审方案及尽调情况表",
+      section: "一、报审方案及尽调情况",
+      dataSource: "授信申请书 / 客户归属关系表 / 采购合同 / 抵押方案",
+      extractionRule: "按模板字段逐项映射企业名称、归属支行、调查人、行业分类、申请额度、贷款用途和担保方式；金额字段统一保留授信品种与期限。",
+      businessRule: "企业名称、申请额度、贷款用途、担保方式必须与审批材料一致；客户经理录入字段需与项目成员清单校验，存在空值时标记为待补充。",
+      sourceFiles: [
+        { name: "授信申请书.docx", detail: "包含本次申请额度、贷款用途、担保方式和授信期限。" },
+        { name: "客户归属关系表.xlsx", detail: "记录管辖支行和调查人信息。" },
+        { name: "抵押方案.pdf", detail: "用于校验担保方式与抵押措施。" },
+      ],
+    },
+    applicantTable: {
+      id: "applicantTable",
+      name: "申请人基本情况表",
+      section: "二、申请人基本情况",
+      dataSource: "营业执照 / 工商登记信息 / 股东名册 / 现场走访材料 / 管理层访谈",
+      extractionRule: "优先取工商登记结构化字段，历史沿革、主营业务和股权结构按工商变更记录、官网信息及访谈纪要合并生成。",
+      businessRule: "基础证照字段必须与营业执照一致；经营地址以现场走访和租赁合同为准；股权变动与访谈口径冲突时保留冲突标记。",
+      sourceFiles: [
+        { name: `${projectName}工商登记信息.pdf`, detail: "提供成立时间、注册资本、注册地址、法定代表人和工商变更记录。" },
+        { name: "股东名册.xlsx", detail: "用于识别实际控制人及股权结构。" },
+        { name: "管理层访谈录音转写.md", detail: "补充主营业务变化、历史沿革和经营地址说明。" },
+      ],
+    },
+    creditRiskTable: {
+      id: "creditRiskTable",
+      name: "征信及风险情况表",
+      section: "三、申请人及实际控制人征信情况",
+      dataSource: "企业征信报告 / 实控人个人征信 / 法院执行网 / 企查查 / 法务访谈",
+      extractionRule: "分别抽取企业征信、实控人征信、涉诉和行政处罚信息；公开渠道检索结果按风险类型去重后写入同一段落。",
+      businessRule: "逾期、关注类贷款、被执行记录和未结诉讼必须显式披露；已调解或已结案事项需写明状态，避免与当前风险混同。",
+      sourceFiles: [
+        { name: "企业征信报告.pdf", detail: "用于校验企业贷款余额、逾期和关注类贷款。" },
+        { name: "实际控制人个人征信.pdf", detail: "用于校验实控人近24个月征信状态。" },
+        { name: "司法风险检索报告.pdf", detail: "汇总法院执行网和企查查的司法风险结果。" },
+      ],
+    },
+    operationAnalysisTable: {
+      id: "operationAnalysisTable",
+      name: "经营能力、财务及担保分析表",
+      section: "四、经营能力、财务及担保分析",
+      dataSource: "销售合同汇总 / 财务报表 / 销售台账 / 授信方案 / 抵押方案 / 管理层访谈",
+      extractionRule: "经营能力分析优先取主营业务、客户结构和订单交付信息；财务表现分析按财务报表与销售台账提炼核心指标；担保及还款分析按授信方案、抵押方案和会议纪要汇总。",
+      businessRule: "经营分析需覆盖主营业务、客户结构与交付节奏；财务分析需明确营业收入、净利润和回款风险；担保分析需同时说明还款来源与抵押物情况，口径冲突时保留人工确认标记。",
+      sourceFiles: [
+        { name: "销售合同汇总.xlsx", detail: "用于判断主营业务构成、客户结构和订单履约节奏。" },
+        { name: `${projectName}2024年财务报表.docx`, detail: "用于提取营业收入、净利润和财务表现结论。" },
+        { name: "抵押方案.pdf", detail: "用于校验抵押物情况与担保安排。" },
+      ],
+    },
+    conclusionTable: {
+      id: "conclusionTable",
+      name: "尽调结论表",
+      section: "五、尽调结论",
+      dataSource: "授信方案 / 风控核查清单 / 贷审规则 / 征信及司法检索结果",
+      extractionRule: "综合授信方案、风险核查、担保落实情况生成尽调结论；投后关注项按放款后监测要求和风险暴露点归纳。",
+      businessRule: "尽调结论必须与授信金额、期限和放款条件一致；投后关注需明确贷后监测重点，不得遗漏资金用途、客户回款和抵押物状态。",
+      sourceFiles: [
+        { name: "授信方案.docx", detail: "提供授信金额、期限和基本放款条件。" },
+        { name: "风控核查清单.xlsx", detail: "用于校验放款前落实事项和投后关注点。" },
+        { name: "司法风险检索报告.pdf", detail: "用于确认结论中涉及的风险披露已被覆盖。" },
+      ],
+    },
+  }));
   const [fieldSearchKeyword, setFieldSearchKeyword] = useState("");
   const [fieldStatusFilter, setFieldStatusFilter] = useState<"all" | "conflict">("all");
 
@@ -682,6 +768,7 @@ export const EditReportView = ({
 
   const selectedGeneratedField =
     aiGeneratedFields.find((field) => field.id === selectedGeneratedFieldId) ?? null;
+  const selectedReportBlock = selectedReportBlockId ? reportBlockConfigs[selectedReportBlockId] ?? null : null;
   const selectedGeneratedFieldContent = selectedGeneratedField
     ? manualReportFieldContents[selectedGeneratedField.id] ?? selectedGeneratedField.content
     : "";
@@ -727,6 +814,16 @@ export const EditReportView = ({
     });
   };
 
+  const updateReportBlockConfig = (blockId: string, updates: Partial<ReportBlockConfig>) => {
+    setReportBlockConfigs((previous) => ({
+      ...previous,
+      [blockId]: {
+        ...previous[blockId],
+        ...updates,
+      },
+    }));
+  };
+
   const openFieldRuleModal = (field: typeof aiGeneratedFields[number]) => {
     setFieldRuleModal({
       isOpen: true,
@@ -737,9 +834,26 @@ export const EditReportView = ({
     });
   };
 
+  const openReportBlockRuleModal = (block: ReportBlockConfig) => {
+    setReportBlockRuleModal({
+      isOpen: true,
+      blockId: block.id,
+      fieldName: block.name,
+      extractionRule: block.extractionRule,
+      businessRule: block.businessRule,
+    });
+  };
+
   const selectGeneratedField = (field: typeof aiGeneratedFields[number]) => {
     setSelectedGeneratedFieldId(field.id);
+    setSelectedReportBlockId(null);
     setActiveEditTargetId(field.targetId);
+  };
+
+  const selectReportBlock = (blockId: string) => {
+    setSelectedReportBlockId(blockId);
+    setSelectedGeneratedFieldId(null);
+    setActiveEditTargetId(`report-block-${blockId}`);
   };
 
   const openSourceFileDetail = (
@@ -789,6 +903,7 @@ export const EditReportView = ({
   const jumpToEditTarget = (targetId: string, tab: "conflict" | "traceability") => {
     setActiveAuditTab(tab);
     setActiveEditTargetId(targetId);
+    setSelectedReportBlockId(null);
 
     window.requestAnimationFrame(() => {
       editTargetRefs.current[targetId]?.scrollIntoView({
@@ -1162,136 +1277,196 @@ export const EditReportView = ({
     );
   };
 
+  const renderConfigurableReportSection = (
+    blockId: string,
+    title: string,
+    contentNode: React.ReactNode,
+  ) => {
+    const isSelected = selectedReportBlockId === blockId;
+    const block = reportBlockConfigs[blockId];
+
+    return (
+      <div
+        ref={registerEditTarget(`report-block-${blockId}`) as React.Ref<HTMLDivElement>}
+        role="button"
+        tabIndex={0}
+        title={block ? `配置${block.name}这一段的数据来源与规则` : "配置这一段的数据来源与规则"}
+        onClick={(event) => {
+          event.stopPropagation();
+          selectReportBlock(blockId);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectReportBlock(blockId);
+          }
+        }}
+        className={`relative mb-6 rounded-md outline-none transition-all ${
+          isSelected
+            ? "bg-blue-50/70 ring-2 ring-blue-400"
+            : "cursor-pointer hover:bg-blue-50/40 hover:ring-1 hover:ring-blue-200 focus-visible:ring-2 focus-visible:ring-blue-300"
+        }`}
+      >
+        <h2 className="border border-slate-900 bg-slate-200 px-2 py-1 text-base font-bold">{title}</h2>
+        {contentNode}
+      </div>
+    );
+  };
+
   const renderWordReportEditor = () => (
-    <div className="mx-auto w-full max-w-[980px] pb-12" onClick={() => setSelectedGeneratedFieldId(null)}>
+    <div
+      className="mx-auto w-full max-w-[980px] pb-12"
+      onClick={() => {
+        setSelectedGeneratedFieldId(null);
+        setSelectedReportBlockId(null);
+      }}
+    >
       <div className="mx-auto min-h-[1280px] w-[900px] bg-white px-[72px] py-[64px] text-[13px] leading-6 text-slate-900 shadow-2xl ring-1 ring-slate-200">
         <div className="mb-6 text-center font-serif">
           <h1 className="text-2xl font-bold tracking-normal">小微企业授信业务尽职调查报告</h1>
           <p className="mt-1 text-sm">（适用于 2000 万元以下公司授信业务）</p>
         </div>
 
-        <section className="mb-6">
-          <h2 className="border border-slate-900 bg-slate-200 px-2 py-1 text-base font-bold">一、报审方案及尽调情况</h2>
-          <table className="w-full table-fixed border-collapse border border-slate-900 text-center">
-            <tbody>
-              <tr>
-                <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2">企业名称</td>
-                <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
-                  {renderWordField("companyName")}
-                </td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">归属支行</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("branch")}</td>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">调查人（双人）</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("investigators")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">行业分类</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("industry")}</td>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">申请额度</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("creditAmount")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">贷款用途</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("loanPurpose")}</td>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">担保方式</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("guaranteeMethod")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">授信期限</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">12个月</td>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">还款方式</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">按月付息，到期还本</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+        {renderConfigurableReportSection("schemeTable", "一、报审方案及尽调情况", (
+            <table className="w-full table-fixed border-collapse border border-slate-900 text-center">
+              <tbody>
+                <tr>
+                  <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2">企业名称</td>
+                  <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
+                    {renderWordField("companyName")}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">归属支行</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("branch")}</td>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">调查人（双人）</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("investigators")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">行业分类</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("industry")}</td>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">申请额度</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("creditAmount")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">贷款用途</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("loanPurpose")}</td>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">担保方式</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("guaranteeMethod")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">授信期限</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">12个月</td>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">还款方式</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">按月付息，到期还本</td>
+                </tr>
+              </tbody>
+            </table>
+          ))}
 
-        <section className="mb-6">
-          <h2 className="border border-slate-900 bg-slate-200 px-2 py-1 text-base font-bold">二、申请人基本情况</h2>
-          <table className="w-full table-fixed border-collapse border border-slate-900 text-center">
-            <tbody>
-              <tr>
-                <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2">成立时间</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("establishDate")}</td>
-                <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2">注册资本</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("registeredCapital")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">法定代表人</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("legalRepresentative")}</td>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">实际控制人</td>
-                <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("actualController")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">注册地址</td>
-                <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">{renderWordField("officeAddress")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">实际经营地址</td>
-                <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">{renderWordField("operatingAddress")}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">历史沿革和主营业务变动</td>
-                <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
-                  {renderWordField("historyAndBusiness", { block: true })}
-                </td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">股权结构</td>
-                <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
-                  {renderWordField("equityChange", { block: true })}
-                </td>
-              </tr>
-              <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2">主营业务</td>
-                <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
-                  {renderWordField("mainBusiness", { block: true })}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+        {renderConfigurableReportSection("applicantTable", "二、申请人基本情况", (
+            <table className="w-full table-fixed border-collapse border border-slate-900 text-center">
+              <tbody>
+                <tr>
+                  <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2">成立时间</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("establishDate")}</td>
+                  <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2">注册资本</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("registeredCapital")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">法定代表人</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("legalRepresentative")}</td>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">实际控制人</td>
+                  <td className="border border-slate-900 px-2 py-2 text-left">{renderWordField("actualController")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">注册地址</td>
+                  <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">{renderWordField("officeAddress")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">实际经营地址</td>
+                  <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">{renderWordField("operatingAddress")}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">历史沿革和主营业务变动</td>
+                  <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
+                    {renderWordField("historyAndBusiness", { block: true })}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">股权结构</td>
+                  <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
+                    {renderWordField("equityChange", { block: true })}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2">主营业务</td>
+                  <td colSpan={3} className="border border-slate-900 px-2 py-2 text-left">
+                    {renderWordField("mainBusiness", { block: true })}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          ))}
 
-        <section className="mb-6">
-          <h2 className="border border-slate-900 bg-slate-200 px-2 py-1 text-base font-bold">三、申请人及实际控制人征信情况</h2>
+        {renderConfigurableReportSection("creditRiskTable", "三、申请人及实际控制人征信情况", (
+            <table className="w-full table-fixed border-collapse border border-slate-900">
+              <tbody>
+                <tr>
+                  <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2 text-center">征信情况</td>
+                  <td className="border border-slate-900 px-2 py-2">{renderWordField("creditSituation", { block: true })}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-900 bg-slate-100 px-2 py-2 text-center">涉诉信息</td>
+                  <td className="border border-slate-900 px-2 py-2">{renderWordField("litigation", { block: true })}</td>
+                </tr>
+              </tbody>
+            </table>
+          ))}
+
+        {renderConfigurableReportSection("operationAnalysisTable", "四、经营能力、财务及担保分析", (
           <table className="w-full table-fixed border-collapse border border-slate-900">
             <tbody>
               <tr>
-                <td className="w-32 border border-slate-900 bg-slate-100 px-2 py-2 text-center">征信情况</td>
-                <td className="border border-slate-900 px-2 py-2">{renderWordField("creditSituation", { block: true })}</td>
+                <td className="w-36 border border-slate-900 bg-slate-100 px-3 py-3 text-center font-medium">经营能力分析</td>
+                <td className="border border-slate-900 px-3 py-3 text-left leading-7">
+                  申请人主营 {renderWordField("mainBusiness")}，前五大客户收入占比约54%，客户合作年限整体较长，但项目验收周期存在一定波动。
+                </td>
               </tr>
               <tr>
-                <td className="border border-slate-900 bg-slate-100 px-2 py-2 text-center">涉诉信息</td>
-                <td className="border border-slate-900 px-2 py-2">{renderWordField("litigation", { block: true })}</td>
+                <td className="border border-slate-900 bg-slate-100 px-3 py-3 text-center font-medium">财务表现分析</td>
+                <td className="border border-slate-900 px-3 py-3 text-left leading-7">
+                  2024年营业收入为 {renderWordField("revenue2024")}，净利润为 {renderWordField("netProfit")}。整体财务表现稳健，应收账款随项目制业务扩张有所上升，后续需关注回款节奏。
+                </td>
+              </tr>
+              <tr>
+                <td className="border border-slate-900 bg-slate-100 px-3 py-3 text-center font-medium">担保及还款分析</td>
+                <td className="border border-slate-900 px-3 py-3 text-left leading-7">
+                  还款来源安排为：{renderWordField("repaymentPlan")} 抵押物情况为：{renderWordField("collateral")}
+                </td>
               </tr>
             </tbody>
           </table>
-        </section>
+        ))}
 
-        <section className="mb-6">
-          <h2 className="border border-slate-900 bg-slate-200 px-2 py-1 text-base font-bold">四、经营能力、财务及担保分析</h2>
-          <div className="border border-t-0 border-slate-900 px-4 py-3">
-            <p className="mb-3 indent-8">
-              申请人主营 {renderWordField("mainBusiness")}，前五大客户收入占比约54%，客户合作年限整体较长，但项目验收周期存在一定波动。
-            </p>
-            <p className="mb-3 indent-8">
-              2024年营业收入为 {renderWordField("revenue2024")}，净利润为 {renderWordField("netProfit")}。整体财务表现稳健，应收账款随项目制业务扩张有所上升，后续需关注回款节奏。
-            </p>
-            <p className="mb-3 indent-8">
-              还款来源安排为：{renderWordField("repaymentPlan")} 抵押物情况为：{renderWordField("collateral")}
-            </p>
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <h2 className="border border-slate-900 bg-slate-200 px-2 py-1 text-base font-bold">五、尽调结论</h2>
-          <div className="border border-t-0 border-slate-900 px-4 py-3">
-            <div className="indent-8">{renderWordField("conclusion", { block: true })}</div>
-            <p className="mt-3 indent-8">放款后按月监测资金用途、主要客户回款及抵押物状态，出现重大异常应及时预警。</p>
-          </div>
-        </section>
+        {renderConfigurableReportSection("conclusionTable", "五、尽调结论", (
+          <table className="w-full table-fixed border-collapse border border-slate-900">
+            <tbody>
+              <tr>
+                <td className="w-36 border border-slate-900 bg-slate-100 px-3 py-3 text-center font-medium">尽调结论</td>
+                <td className="border border-slate-900 px-3 py-3 text-left leading-7">
+                  {renderWordField("conclusion", { block: true })}
+                </td>
+              </tr>
+              <tr>
+                <td className="border border-slate-900 bg-slate-100 px-3 py-3 text-center font-medium">投后关注</td>
+                <td className="border border-slate-900 px-3 py-3 text-left leading-7">
+                  放款后按月监测资金用途、主要客户回款及抵押物状态，出现重大异常应及时预警。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        ))}
 
         <div className="mt-12 grid grid-cols-2 gap-12 text-sm">
           <div>
@@ -1494,76 +1669,36 @@ export const EditReportView = ({
         </g>
         <g transform="translate(90 890)" fontSize="12">
           <rect x="0" y="18" width="720" height="22" fill="#d9d9d9" stroke="#111827" strokeWidth="1" />
-          <text x="8" y="34" fontSize="14" fontWeight="700">四、申请人经营能力分析（结合资料及访谈结论）</text>
+          <text x="8" y="34" fontSize="14" fontWeight="700">四、经营能力、财务及担保分析</text>
 
-          <rect x="0" y="40" width="720" height="112" fill="#ffffff" stroke="#111827" strokeWidth="1" />
-          <line x1="128" y1="40" x2="128" y2="152" stroke="#111827" />
-          <line x1="0" y1="96" x2="720" y2="96" stroke="#111827" />
-          <text x="18" y="72">主营业务及生产销售分析</text>
-          {renderMockField("mainBusiness", 148, 66, [
-            "主营智能装配线、精密检测设备及工业机器人集成，",
-            "前五大客户收入占比约54%。"
-          ], { width: 535, height: 44 })}
-          <text x="18" y="128">上下游情况</text>
-          <text x="148" y="122" fill="#111827">上游为核心电子元器件供应商，下游集中于新能源汽车与3C制造客户。</text>
-
-          <rect x="0" y="178" width="720" height="22" fill="#d9d9d9" stroke="#111827" strokeWidth="1" />
-          <text x="8" y="194" fontSize="14" fontWeight="700">五、财务状况说明</text>
-          <rect x="0" y="200" width="720" height="210" fill="#ffffff" stroke="#111827" strokeWidth="1" />
-          <line x1="110" y1="200" x2="110" y2="410" stroke="#111827" />
-          <line x1="250" y1="232" x2="250" y2="360" stroke="#111827" />
-          <line x1="360" y1="232" x2="360" y2="360" stroke="#111827" />
-          <line x1="470" y1="232" x2="470" y2="360" stroke="#111827" />
-          <line x1="590" y1="232" x2="590" y2="360" stroke="#111827" />
-          {[232, 264, 296, 328, 360].map((lineY) => (
-            <line key={`finance-${lineY}`} x1="0" y1={lineY} x2="720" y2={lineY} stroke="#111827" />
+          <rect x="0" y="40" width="720" height="178" fill="#ffffff" stroke="#111827" strokeWidth="1" />
+          <line x1="132" y1="40" x2="132" y2="218" stroke="#111827" />
+          {[99, 158].map((lineY) => (
+            <line key={`analysis-${lineY}`} x1="0" y1={lineY} x2="720" y2={lineY} stroke="#111827" />
           ))}
-          <text x="18" y="222">项目</text>
-          <text x="150" y="222">2022年</text>
-          <text x="285" y="222">2023年</text>
-          <text x="395" y="222">2024年</text>
-          <text x="510" y="222">变化说明</text>
-          <text x="18" y="254">营业收入</text>
-          <text x="150" y="254">0.82亿元</text>
-          <text x="285" y="254">1.05亿元</text>
-          {renderMockField("revenue2024", 395, 254, ["1.20亿元"], { width: 90, height: 23 })}
-          <text x="510" y="254">订单交付增长</text>
-          <text x="18" y="286">净利润</text>
-          <text x="150" y="286">820万元</text>
-          <text x="285" y="286">1,180万元</text>
-          {renderMockField("netProfit", 395, 286, ["1,500万元"], { width: 95, height: 23 })}
-          <text x="510" y="286">毛利率基本稳定</text>
-          <text x="18" y="318">应收账款</text>
-          <text x="150" y="318">1,950万元</text>
-          <text x="285" y="318">2,680万元</text>
-          <text x="395" y="318">3,120万元</text>
-          <text x="510" y="318">回款周期略有拉长</text>
-          <text x="18" y="350">现金流</text>
-          <text x="150" y="350">净流入</text>
-          <text x="285" y="350">净流入</text>
-          <text x="395" y="350">净流入</text>
-          <text x="510" y="350">经营现金流稳定</text>
-          <text x="18" y="390">财务评价</text>
-          <text x="130" y="386">整体财务表现稳健，应收账款随项目制业务扩张有所上升，需持续关注回款节奏。</text>
-
-          <rect x="0" y="438" width="720" height="22" fill="#d9d9d9" stroke="#111827" strokeWidth="1" />
-          <text x="8" y="454" fontSize="14" fontWeight="700">六、还款来源及担保分析</text>
-          <rect x="0" y="460" width="720" height="174" fill="#ffffff" stroke="#111827" strokeWidth="1" />
-          <line x1="125" y1="460" x2="125" y2="634" stroke="#111827" />
-          <line x1="0" y1="522" x2="720" y2="522" stroke="#111827" />
-          <line x1="0" y1="582" x2="720" y2="582" stroke="#111827" />
-          <text x="18" y="493">还款来源</text>
-          {renderMockField("repaymentPlan", 145, 486, [
+          <text x="18" y="74">经营能力分析</text>
+          {renderMockField("mainBusiness", 152, 66, [
+            "主营智能装配线、精密检测设备及工业机器人集成，",
+            "前五大客户收入占比约54%，客户合作年限整体较长。"
+          ], { width: 540, height: 44 })}
+          <text x="18" y="133">财务表现分析</text>
+          <text x="152" y="125">2024年营业收入为</text>
+          {renderMockField("revenue2024", 245, 125, ["1.20亿元"], { width: 72, height: 23 })}
+          <text x="322" y="125">，净利润为</text>
+          {renderMockField("netProfit", 388, 125, ["1,500万元"], { width: 84, height: 23 })}
+          <text x="478" y="125">。</text>
+          <text x="152" y="147">整体财务表现稳健，应收账款随项目制业务扩张有所上升，后续需关注回款节奏。</text>
+          <text x="18" y="192">担保及还款分析</text>
+          <text x="152" y="184">还款来源安排为：</text>
+          {renderMockField("repaymentPlan", 252, 184, [
             "销售回款完全覆盖本次贷款本息，",
             "辅以股东增信与设备抵押。"
-          ], { width: 530, height: 44 })}
-          <text x="18" y="553">抵押情况</text>
-          {renderMockField("collateral", 145, 546, [
+          ], { width: 430, height: 44 })}
+          <text x="152" y="212">抵押物情况为：</text>
+          {renderMockField("collateral", 240, 212, [
             "自有厂房评估价值3,200万元，拟抵押率46.9%，",
-            "权属清晰，无重复抵押。"
-          ], { width: 530, height: 44 })}
-          <text x="18" y="613">风控措施</text>
-          <text x="145" y="608">贷款资金采用受托支付，按月监测主要客户回款及订单履约进度。</text>
+            "权属清晰。"
+          ], { width: 445, height: 44 })}
 
           <text x="360" y="720" textAnchor="middle" fill="#9ca3af">第 2 页 / 共 3 页</text>
         </g>
@@ -1590,15 +1725,17 @@ export const EditReportView = ({
           ], { width: 520, height: 44 })}
 
           <rect x="0" y="238" width="720" height="22" fill="#d9d9d9" stroke="#111827" strokeWidth="1" />
-          <text x="8" y="254" fontSize="14" fontWeight="700">八、尽调结论</text>
-          <rect x="0" y="260" width="720" height="188" fill="#ffffff" stroke="#111827" strokeWidth="1" />
-          <text x="24" y="292">经资料核验、现场访谈、征信及司法检索，申请人经营持续，主营业务真实，</text>
-          <text x="24" y="320">财务表现整体稳定，担保措施具备可操作性。结合本次资金用途及还款安排：</text>
-          {renderMockField("conclusion", 24, 356, [
+          <text x="8" y="254" fontSize="14" fontWeight="700">五、尽调结论</text>
+          <rect x="0" y="260" width="720" height="154" fill="#ffffff" stroke="#111827" strokeWidth="1" />
+          <line x1="132" y1="260" x2="132" y2="414" stroke="#111827" />
+          <line x1="0" y1="337" x2="720" y2="337" stroke="#111827" />
+          <text x="18" y="302">尽调结论</text>
+          {renderMockField("conclusion", 152, 294, [
             "建议给予1,500万元流动资金贷款授信，期限12个月，",
             "落实抵押登记和股东保证后放款。"
-          ], { width: 660, height: 44 })}
-          <text x="24" y="414">放款后按月监测资金用途、主要客户回款及抵押物状态，出现重大异常应及时预警。</text>
+          ], { width: 530, height: 44 })}
+          <text x="18" y="379">投后关注</text>
+          <text x="152" y="372">放款后按月监测资金用途、主要客户回款及抵押物状态，出现重大异常应及时预警。</text>
 
           <rect x="0" y="486" width="720" height="154" fill="#ffffff" stroke="#111827" strokeWidth="1" />
           <line x1="360" y1="486" x2="360" y2="640" stroke="#111827" />
@@ -1654,11 +1791,15 @@ export const EditReportView = ({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                  <BrainCircuit size={18} />
+                  {selectedReportBlock ? <Table size={18} /> : <BrainCircuit size={18} />}
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">AI 生成审查</h3>
-                  <p className="text-[11px] text-gray-500">字段来源、准确性、计算规则审查</p>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    {selectedReportBlock ? "段落配置" : "AI 生成审查"}
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    {selectedReportBlock ? "显示这一段的数据来源、抽取规则与业务规则" : "字段来源、准确性、计算规则审查"}
+                  </p>
                 </div>
               </div>
               {selectedGeneratedField?.conflict && (
@@ -1670,7 +1811,49 @@ export const EditReportView = ({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            {!selectedGeneratedField ? (
+            {selectedReportBlock ? (
+              <div className="space-y-4">
+                <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Table size={16} className="shrink-0 text-blue-600" />
+                        <h4 className="truncate text-base font-bold text-slate-950">{selectedReportBlock.name}</h4>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-500">{selectedReportBlock.section}这一段</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600">
+                      这一段
+                    </span>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <BookOpen size={15} className="text-blue-600" />
+                      <h4 className="text-sm font-bold text-slate-900">规则配置</h4>
+                    </div>
+                    <button
+                      onClick={() => openReportBlockRuleModal(selectedReportBlock)}
+                      className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      编辑规则
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[10px] font-bold text-slate-400">数据来源</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-700">{selectedReportBlock.extractionRule}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[10px] font-bold text-slate-400">业务规则</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-700">{selectedReportBlock.businessRule}</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            ) : !selectedGeneratedField ? (
               <div className="space-y-4">
                 <section className="flex min-h-[148px] items-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="grid w-full grid-cols-3 items-center gap-2">
@@ -1815,12 +1998,12 @@ export const EditReportView = ({
                       onClick={() => openFieldRuleModal(selectedGeneratedField)}
                       className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                     >
-                      编辑规则
+                      规则设置
                     </button>
                   </div>
                   <div className="space-y-2">
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold text-slate-400">数据口径</p>
+                      <p className="text-[10px] font-bold text-slate-400">数据来源</p>
                       <p className="mt-1 text-xs leading-5 text-slate-700">{selectedGeneratedField.source}</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
@@ -1948,6 +2131,106 @@ export const EditReportView = ({
                 </button>
                 <button
                   onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "" })}
+                  className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  保存规则
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {reportBlockRuleModal.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 px-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">规则设置</h3>
+                  <p className="mt-1 text-sm text-slate-500">{reportBlockRuleModal.fieldName}</p>
+                </div>
+                <button
+                  onClick={() =>
+                    setReportBlockRuleModal({
+                      isOpen: false,
+                      blockId: "",
+                      fieldName: "",
+                      extractionRule: "",
+                      businessRule: "",
+                    })
+                  }
+                  className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
+                  <textarea
+                    value={reportBlockRuleModal.extractionRule}
+                    onChange={(event) =>
+                      setReportBlockRuleModal((previous) => ({ ...previous, extractionRule: event.target.value }))
+                    }
+                    className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700">业务规则</span>
+                  <textarea
+                    value={reportBlockRuleModal.businessRule}
+                    onChange={(event) =>
+                      setReportBlockRuleModal((previous) => ({ ...previous, businessRule: event.target.value }))
+                    }
+                    className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
+                  保存后会更新这一段的抽取规则和业务规则，后续生成将按新的规则执行。
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() =>
+                    setReportBlockRuleModal({
+                      isOpen: false,
+                      blockId: "",
+                      fieldName: "",
+                      extractionRule: "",
+                      businessRule: "",
+                    })
+                  }
+                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => {
+                    updateReportBlockConfig(reportBlockRuleModal.blockId, {
+                      extractionRule: reportBlockRuleModal.extractionRule,
+                      businessRule: reportBlockRuleModal.businessRule,
+                    });
+                    setReportBlockRuleModal({
+                      isOpen: false,
+                      blockId: "",
+                      fieldName: "",
+                      extractionRule: "",
+                      businessRule: "",
+                    });
+                  }}
                   className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   保存规则
