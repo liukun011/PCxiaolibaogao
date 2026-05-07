@@ -85,13 +85,16 @@ import { MaterialPreviewDialog, type MaterialPreviewData } from "@/src/component
 import { mockInterview, type InterviewRecord, type InterviewTranscript, type DDQuestion } from "@/src/types";
 import {
   TEMPLATE_OPTIONS,
+  TEMPLATE_SCOPE_OPTIONS,
   TEMPLATE_QUESTION_SETS,
   createDefaultField,
   getTemplateCategoryTitle,
+  getTemplateScopeTitle,
   type FieldConfig,
   type InterviewQuestion,
   type QuestionCollection,
   type TemplateItem,
+  type TemplateScope,
 } from "@/src/shared/templateData";
 export const TemplatesView = ({
   templates,
@@ -108,10 +111,11 @@ export const TemplatesView = ({
   const [uploadModal, setUploadModal] = useState<{
     isOpen: boolean;
     category: string;
+    applicationScope: TemplateScope;
     name: string;
     description: string;
     file: File | null;
-  }>({ isOpen: false, category: TEMPLATE_OPTIONS[0].id, name: "", description: "", file: null });
+  }>({ isOpen: false, category: TEMPLATE_OPTIONS[0].id, applicationScope: "personal", name: "", description: "", file: null });
   const [uploadModalError, setUploadModalError] = useState("");
   const uploadTimersRef = useRef<number[]>([]);
   const [confirmModal, setConfirmModal] = useState<{
@@ -134,7 +138,7 @@ export const TemplatesView = ({
   }, []);
 
   const filteredTemplates = templates.filter((template) =>
-    [template.name, template.description, template.uploader, template.category]
+    [template.name, template.description, template.uploader, template.category, getTemplateScopeTitle(template.applicationScope)]
       .join(" ")
       .toLowerCase()
       .includes(searchKeyword.trim().toLowerCase()),
@@ -144,6 +148,7 @@ export const TemplatesView = ({
     setUploadModal({
       isOpen: true,
       category: TEMPLATE_OPTIONS[0].id,
+      applicationScope: "personal",
       name: "",
       description: "",
       file: null,
@@ -175,6 +180,7 @@ export const TemplatesView = ({
     setUploadModal({
       isOpen: false,
       category: TEMPLATE_OPTIONS[0].id,
+      applicationScope: "personal",
       name: "",
       description: "",
       file: null,
@@ -225,12 +231,14 @@ export const TemplatesView = ({
         uploadTime: formatted,
         status: "enabled",
         category: uploadModal.category,
+        applicationScope: uploadModal.applicationScope,
       };
       setTemplates((prev) => [nextTemplate, ...prev]);
       setUploadStatus("idle");
       setUploadModal({
         isOpen: false,
         category: TEMPLATE_OPTIONS[0].id,
+        applicationScope: "personal",
         name: "",
         description: "",
         file: null,
@@ -343,15 +351,22 @@ export const TemplatesView = ({
                   }`}>
                     <FileText size={22} />
                   </div>
-                  <h3
-                    className={`min-w-0 truncate text-base font-bold ${template.status === "enabled" ? "text-gray-800" : "text-slate-600"}`}
-                    title={template.name}
-                  >
-                    {template.name}
-                  </h3>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-                    {getTemplateCategoryTitle(template.category)}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3
+                      className={`truncate text-base font-bold ${template.status === "enabled" ? "text-gray-800" : "text-slate-600"}`}
+                      title={template.name}
+                    >
+                      {template.name}
+                    </h3>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                        {getTemplateCategoryTitle(template.category)}
+                      </span>
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
+                        {getTemplateScopeTitle(template.applicationScope)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
                   template.status === "enabled"
@@ -445,7 +460,7 @@ export const TemplatesView = ({
               initial={{ opacity: 0, scale: 0.96, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 16 }}
-              className="relative w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl"
+              className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -480,6 +495,34 @@ export const TemplatesView = ({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-gray-700">
+                    应用范围 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TEMPLATE_SCOPE_OPTIONS.map((option) => {
+                      const isActive = uploadModal.applicationScope === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            setUploadModal((prev) => ({ ...prev, applicationScope: option.id }))
+                          }
+                          disabled={uploadStatus !== "idle"}
+                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                            isActive
+                              ? "border-blue-500 bg-blue-50 text-blue-700"
+                              : "border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-white"
+                          }`}
+                        >
+                          {option.title}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>

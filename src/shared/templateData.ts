@@ -19,6 +19,17 @@ export const TEMPLATE_OPTIONS = [
 export const getTemplateCategoryTitle = (category?: string) =>
   TEMPLATE_OPTIONS.find((option) => option.id === category)?.title ?? "未分类";
 
+export type TemplateScope = "personal" | "organization" | "public";
+
+export const TEMPLATE_SCOPE_OPTIONS: { id: TemplateScope; title: string }[] = [
+  { id: "personal", title: "个人使用" },
+  { id: "organization", title: "全员使用" },
+  { id: "public", title: "网络公开" },
+];
+
+export const getTemplateScopeTitle = (scope?: TemplateScope) =>
+  TEMPLATE_SCOPE_OPTIONS.find((option) => option.id === scope)?.title ?? "个人使用";
+
 export type InterviewQuestion = {
   category: string;
   question: string;
@@ -41,6 +52,7 @@ export type TemplateItem = {
   uploadTime: string;
   status: "enabled" | "disabled";
   category?: string;
+  applicationScope?: TemplateScope;
 };
 
 export type FieldConfig = {
@@ -76,6 +88,7 @@ export const INITIAL_TEMPLATE_ITEMS: TemplateItem[] = [
     uploadTime: "2026-04-10 14:30",
     status: "enabled",
     category: "bank",
+    applicationScope: "organization",
   },
   {
     id: "tpl-2",
@@ -85,6 +98,7 @@ export const INITIAL_TEMPLATE_ITEMS: TemplateItem[] = [
     uploadTime: "2026-04-10 16:15",
     status: "disabled",
     category: "general",
+    applicationScope: "personal",
   },
   {
     id: "tpl-3",
@@ -94,6 +108,7 @@ export const INITIAL_TEMPLATE_ITEMS: TemplateItem[] = [
     uploadTime: "2026-04-11 09:20",
     status: "enabled",
     category: "equity",
+    applicationScope: "public",
   },
 ];
 

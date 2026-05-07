@@ -51,10 +51,6 @@ type FolderDialogState = {
   confirmLabel: string;
 };
 
-type MergeDialogState = {
-  fileIds: string[];
-};
-
 type NoteDialogState = {
   mode: 'create' | 'edit';
   fileId?: string;
@@ -416,10 +412,6 @@ export const DocumentClassificationSection = ({
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const [folderNameInput, setFolderNameInput] = useState('');
   const [folderDialogError, setFolderDialogError] = useState('');
-  const [selectedMergeIds, setSelectedMergeIds] = useState<string[]>([]);
-  const [mergeDialog, setMergeDialog] = useState<MergeDialogState | null>(null);
-  const [mergeTitleInput, setMergeTitleInput] = useState('');
-  const [mergeDialogError, setMergeDialogError] = useState('');
   const [noteDialog, setNoteDialog] = useState<NoteDialogState | null>(null);
   const [noteDialogError, setNoteDialogError] = useState('');
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -459,8 +451,8 @@ export const DocumentClassificationSection = ({
   );
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
   const breadcrumbs = useMemo(() => buildBreadcrumbs(selectedFolder), [selectedFolder]);
-  const allCurrentFilesSelected =
-    currentFiles.length > 0 && currentFiles.every((file) => selectedMergeIds.includes(file.id));
+  const isInterviewFolderSelected = selectedFolder.split('/').filter(Boolean)[0] === INTERVIEW_FOLDER;
+  const isNoteFolderSelected = selectedFolder.split('/').filter(Boolean)[0] === NOTE_FOLDER;
   const failedFiles = useMemo(
     () => files.filter((file) => file.parseStatus === 'failed'),
     [files],
@@ -471,12 +463,6 @@ export const DocumentClassificationSection = ({
       setSelectedFileId(null);
     }
   }, [files, selectedFileId]);
-
-  useEffect(() => {
-    setSelectedMergeIds((previous) =>
-      previous.filter((fileId) => currentFiles.some((file) => file.id === fileId)),
-    );
-  }, [currentFiles]);
 
   useEffect(() => {
     onFilesStateChange?.(files.length > 0);
@@ -715,6 +701,10 @@ export const DocumentClassificationSection = ({
 
   const deleteFile = (fileId: string) => {
     const targetFile = files.find((file) => file.id === fileId);
+    if (targetFile?.sourceKind === 'interview') {
+      return;
+    }
+
     const shouldDelete = window.confirm(
       `确定删除文件「${targetFile?.title ?? '当前文件'}」吗？删除后将无法恢复。`,
     );
@@ -726,7 +716,6 @@ export const DocumentClassificationSection = ({
     setFiles((previous) => previous.filter((file) => file.id !== fileId));
     setAddingTagId((previous) => (previous === fileId ? null : previous));
     setSelectedFileId((previous) => (previous === fileId ? null : previous));
-    setSelectedMergeIds((previous) => previous.filter((currentId) => currentId !== fileId));
   };
 
   const toggleAudioPlayback = (fileId: string) => {
@@ -865,107 +854,6 @@ export const DocumentClassificationSection = ({
     }, 220);
   };
 
-  const toggleMergeSelection = (fileId: string) => {
-    setSelectedMergeIds((previous) =>
-      previous.includes(fileId)
-        ? previous.filter((currentId) => currentId !== fileId)
-        : [...previous, fileId],
-    );
-  };
-
-  const toggleSelectAllCurrentFiles = () => {
-    setSelectedMergeIds((previous) => {
-      if (allCurrentFilesSelected) {
-        return previous.filter((fileId) => !currentFiles.some((file) => file.id === fileId));
-      }
-
-      return Array.from(new Set([...previous, ...currentFiles.map((file) => file.id)]));
-    });
-  };
-
-  const openMergeDialog = () => {
-    if (selectedMergeIds.length < 2) {
-      return;
-    }
-
-    const selectedMergeFiles = currentFiles.filter((file) => selectedMergeIds.includes(file.id));
-    const defaultTitle =
-      selectedMergeFiles.length > 0
-        ? `合并文档（${currentFiles.filter((file) => file.title.startsWith('合并文档（')).length + 1}）`
-        : '';
-
-    setMergeDialog({ fileIds: selectedMergeIds });
-    setMergeTitleInput(defaultTitle);
-    setMergeDialogError('');
-  };
-
-  const closeMergeDialog = () => {
-    setMergeDialog(null);
-    setMergeTitleInput('');
-    setMergeDialogError('');
-  };
-
-  const submitMergeDialog = () => {
-    if (!mergeDialog) {
-      return;
-    }
-
-    const nextTitle = mergeTitleInput.trim();
-    if (!nextTitle) {
-      setMergeDialogError('合并文档名称不能为空');
-      return;
-    }
-
-    const mergeFiles = files.filter((file) => mergeDialog.fileIds.includes(file.id));
-    if (mergeFiles.length < 2) {
-      setMergeDialogError('至少需要选择两个文件才能合并');
-      return;
-    }
-
-    const baseDirectoryPath = mergeFiles[0].directoryPath;
-    const mergedTags = Array.from(new Set<string>(mergeFiles.flatMap((file) => file.tags))).slice(
-      0,
-      8,
-    );
-    const mergedType =
-      new Set(mergeFiles.map((file) => file.type)).size === 1 ? mergeFiles[0].type : '文档资料';
-    const mergedSummary = `已手工合并 ${mergeFiles.length} 份资料：${mergeFiles
-      .map((file) => file.title)
-      .join('、')}。适用于将同一主题下的照片、附件或分页材料合并管理。`;
-    const mergedName = `${nextTitle}.合并文档`;
-    const uploadTimeLabel = formatUploadTime();
-
-    const mergedDocument: KnowledgeDocument = {
-      id: `merged-${Date.now()}`,
-      name: mergedName,
-      title: nextTitle,
-      type: mergedType,
-      summary: mergedSummary,
-      tags: mergedTags,
-      extension: 'merge',
-      directoryPath: baseDirectoryPath,
-      relativePath: `${baseDirectoryPath}/${mergedName}`,
-      segments:
-        baseDirectoryPath === DIRECTORY_PLACEHOLDER
-          ? [DIRECTORY_PLACEHOLDER]
-          : baseDirectoryPath.split('/'),
-      folderDepth:
-        baseDirectoryPath === DIRECTORY_PLACEHOLDER ? 0 : baseDirectoryPath.split('/').length,
-      sizeLabel: `${mergeFiles.length}项合并`,
-      updatedAtLabel: uploadTimeLabel,
-      parseStatus: 'success',
-      parseError: null,
-    };
-
-    setFiles((previous) => [
-      ...previous.filter((file) => !mergeDialog.fileIds.includes(file.id)),
-      mergedDocument,
-    ]);
-    setSelectedFileId(mergedDocument.id);
-    setSelectedMergeIds([]);
-    closeMergeDialog();
-  };
-
   const submitTag = (fileId: string) => {
     if (tagInput.trim()) {
       setFiles((previous) =>
@@ -1067,63 +955,56 @@ export const DocumentClassificationSection = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <div
-                    className="relative"
-                    onMouseEnter={openParseFailuresPopover}
-                    onMouseLeave={closeParseFailuresPopover}
-                  >
-                    <button
-                      type="button"
-                      onClick={reparseFailedFiles}
-                      disabled={failedFiles.length === 0 || isReparsingFailedFiles}
-                      className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
-                        isReparsingFailedFiles
-                          ? 'cursor-wait border border-blue-300 bg-blue-600 text-white shadow-sm shadow-blue-200'
-                          : failedFiles.length === 0
-                            ? 'cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400'
-                            : 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                      }`}
-                    >
-                      <AlertCircle size={13} />
-                      {isReparsingFailedFiles ? '重新解析中...' : '重新解析'}
-                    </button>
-
+                  {!isInterviewFolderSelected && (
                     <div
-                      className={`absolute right-0 top-[calc(100%+8px)] z-20 w-72 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-xl transition-all ${
-                        showParseFailuresPopover
-                          ? 'visible pointer-events-auto opacity-100'
-                          : 'invisible pointer-events-none opacity-0'
-                      }`}
+                      className="relative"
+                      onMouseEnter={openParseFailuresPopover}
+                      onMouseLeave={closeParseFailuresPopover}
                     >
-                      <div className="absolute -top-2 right-6 h-4 w-4 rotate-45 border-l border-t border-gray-200 bg-white" />
-                      <div className="text-[11px] font-bold text-gray-800">
-                        {failedFiles.length > 0 ? `解析失败文件 (${failedFiles.length})` : '暂无解析失败文件'}
+                      <button
+                        type="button"
+                        onClick={reparseFailedFiles}
+                        disabled={failedFiles.length === 0 || isReparsingFailedFiles}
+                        className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                          isReparsingFailedFiles
+                            ? 'cursor-wait border border-blue-300 bg-blue-600 text-white shadow-sm shadow-blue-200'
+                            : failedFiles.length === 0
+                              ? 'cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400'
+                              : 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        <AlertCircle size={13} />
+                        {isReparsingFailedFiles ? '重新解析中...' : '重新解析'}
+                      </button>
+
+                      <div
+                        className={`absolute right-0 top-[calc(100%+8px)] z-20 w-72 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-xl transition-all ${
+                          showParseFailuresPopover
+                            ? 'visible pointer-events-auto opacity-100'
+                            : 'invisible pointer-events-none opacity-0'
+                        }`}
+                      >
+                        <div className="absolute -top-2 right-6 h-4 w-4 rotate-45 border-l border-t border-gray-200 bg-white" />
+                        <div className="text-[11px] font-bold text-gray-800">
+                          {failedFiles.length > 0 ? `解析失败文件 (${failedFiles.length})` : '暂无解析失败文件'}
+                        </div>
+                        {failedFiles.length > 0 ? (
+                          <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
+                            {failedFiles.map((file) => (
+                              <div key={file.id} className="rounded-lg bg-red-50/80 px-2.5 py-2">
+                                <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
+                                <div className="mt-1 text-[10px] text-red-700">{file.parseError ?? '解析失败'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-[10px] leading-5 text-gray-500">
+                            当前资料解析正常，如后续出现失败文件，会在这里统一提示。
+                          </div>
+                        )}
                       </div>
-                      {failedFiles.length > 0 ? (
-                        <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
-                          {failedFiles.map((file) => (
-                            <div key={file.id} className="rounded-lg bg-red-50/80 px-2.5 py-2">
-                              <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
-                              <div className="mt-1 text-[10px] text-red-700">{file.parseError ?? '解析失败'}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-2 text-[10px] leading-5 text-gray-500">
-                          当前资料解析正常，如后续出现失败文件，会在这里统一提示。
-                        </div>
-                      )}
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={openMergeDialog}
-                    disabled={selectedMergeIds.length < 2}
-                    className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition-all hover:bg-indigo-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
-                  >
-                    <FileText size={13} />
-                    合并文档
-                  </button>
+                  )}
                   {selectedFolder === NOTE_FOLDER && (
                     <button
                       type="button"
@@ -1142,13 +1023,15 @@ export const DocumentClassificationSection = ({
                     <Plus size={13} />
                     新建
                   </button>
-                  <UploadActionMenu
-                    isUploading={isUploading}
-                    buttonLabel="上传"
-                    onSingleUpload={() => triggerSingleUpload(selectedFolder || DEFAULT_UPLOAD_FOLDER)}
-                    onDirectoryUpload={triggerDirectoryUpload}
-                    buttonClassName="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700"
-                  />
+                  {!isNoteFolderSelected && (
+                    <UploadActionMenu
+                      isUploading={isUploading}
+                      buttonLabel="上传"
+                      onSingleUpload={() => triggerSingleUpload(selectedFolder || DEFAULT_UPLOAD_FOLDER)}
+                      onDirectoryUpload={triggerDirectoryUpload}
+                      buttonClassName="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700"
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -1208,16 +1091,7 @@ export const DocumentClassificationSection = ({
 
               {currentFiles.length > 0 ? (
                 <div className="px-3 py-2">
-                  <div className="grid grid-cols-[28px_minmax(0,1.8fr)_150px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    <label className="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={allCurrentFilesSelected}
-                        onChange={toggleSelectAllCurrentFiles}
-                        aria-label={allCurrentFilesSelected ? '取消全选当前目录文件' : '全选当前目录文件'}
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </label>
+                  <div className="grid grid-cols-[minmax(0,1.8fr)_150px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
                     <span>名称</span>
                     <span>上传时间</span>
                     <span className="text-right">操作</span>
@@ -1229,18 +1103,10 @@ export const DocumentClassificationSection = ({
                     return (
                       <div
                         key={file.id}
-                        className={`grid grid-cols-[28px_minmax(0,1.8fr)_150px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
+                        className={`grid grid-cols-[minmax(0,1.8fr)_150px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
                           isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                         }`}
                       >
-                        <label className="flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedMergeIds.includes(file.id)}
-                            onChange={() => toggleMergeSelection(file.id)}
-                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                        </label>
                         <button
                           type="button"
                           onClick={() => setSelectedFileId(file.id)}
@@ -1278,13 +1144,15 @@ export const DocumentClassificationSection = ({
                           >
                             <Pencil size={13} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteFile(file.id)}
-                            className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-red-600"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {file.sourceKind !== 'interview' && (
+                            <button
+                              type="button"
+                              onClick={() => deleteFile(file.id)}
+                              className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-red-600"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1576,90 +1444,6 @@ export const DocumentClassificationSection = ({
         </div>
       )}
 
-      {mergeDialog && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">合并文档</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  可将同一内容下的多张照片或多个附件合并为一个资料条目。
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeMergeDialog}
-                className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-gray-700">合并后名称</label>
-                <input
-                  autoFocus
-                  type="text"
-                  value={mergeTitleInput}
-                  onChange={(event) => {
-                    setMergeTitleInput(event.target.value);
-                    if (mergeDialogError) {
-                      setMergeDialogError('');
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      submitMergeDialog();
-                    }
-                  }}
-                  placeholder="请输入合并后的文档名称"
-                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition-all focus:border-blue-300 focus:bg-white"
-                />
-                {mergeDialogError && (
-                  <p className="mt-2 text-xs font-medium text-red-500">{mergeDialogError}</p>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-indigo-500">
-                  已选文件
-                </div>
-                <div className="space-y-2">
-                  {files
-                    .filter((file) => mergeDialog.fileIds.includes(file.id))
-                    .map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-gray-700 shadow-sm"
-                      >
-                        <FileText size={14} className="text-indigo-500" />
-                        <span className="truncate">{file.title}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeMergeDialog}
-                className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={submitMergeDialog}
-                className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700"
-              >
-                确认合并
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 };
