@@ -2,12 +2,15 @@
 import {
   AlertCircle,
   BrainCircuit,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Eye,
+  Files,
   FileText,
   FolderPlus,
   FolderTree,
+  Loader2,
   Pause,
   Pencil,
   Play,
@@ -57,6 +60,64 @@ type NoteDialogState = {
   content: string;
 };
 
+type UploadMode = 'files' | 'directory';
+
+type UploadOptions = {
+  sectionRoot?: string;
+  fallbackPath?: string;
+};
+
+type UploadableFile = File & {
+  uploadRelativePath?: string;
+};
+
+type UploadProgressState = {
+  id: number;
+  mode: UploadMode;
+  status: 'processing' | 'cancelling' | 'complete' | 'failed' | 'cancelled';
+  totalFiles: number;
+  processedFiles: number;
+  totalDirectories: number;
+  failedFiles: number;
+  currentFileName: string;
+  targetLabel: string;
+  message: string;
+};
+
+type UploadSummaryState = {
+  mode: UploadMode;
+  totalFiles: number;
+  totalDirectories: number;
+  failedFiles: number;
+  targetLabel: string;
+  uploadedAtLabel: string;
+};
+
+type PendingUploadState = {
+  mode: UploadMode;
+  selectedFiles: UploadableFile[];
+  options: UploadOptions;
+  inputElement?: HTMLInputElement;
+  totalFiles: number;
+  totalDirectories: number;
+  totalSize: number;
+  targetLabel: string;
+  rootFolderName: string;
+  sampleFileNames: string[];
+};
+
+type FileSystemFileHandleLike = {
+  kind: 'file';
+  name: string;
+  getFile: () => Promise<File>;
+};
+
+type FileSystemDirectoryHandleLike = {
+  kind: 'directory';
+  name: string;
+  entries: () => AsyncIterable<[string, FileSystemFileHandleLike | FileSystemDirectoryHandleLike]>;
+};
+
 type FolderTreeNodeData = {
   name: string;
   path: string;
@@ -68,6 +129,10 @@ const INTERVIEW_FOLDER = '访谈录音';
 const NOTE_FOLDER = '笔记';
 const DEFAULT_MATERIAL_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER];
 const DEFAULT_MOCK_TIMES = ['2026-04-18 09:32', '2026-04-18 10:16', '2026-04-18 11:05'];
+const UPLOAD_BATCH_SIZE = 35;
+const UPLOAD_BATCH_DELAY_MS = 520;
+const UPLOAD_PROGRESS_DISMISS_DELAY_MS = 3200;
+const FILES_PAGE_SIZE = 80;
 
 const getFolderOrder = (path: string) => {
   const rootFolder = path.split('/').filter(Boolean)[0] ?? '';
@@ -207,6 +272,54 @@ const formatUploadTime = () =>
     minute: '2-digit',
   }).format(new Date());
 
+const waitForUploadBatch = () =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, UPLOAD_BATCH_DELAY_MS);
+  });
+
+const formatUploadModeLabel = (mode: UploadMode) => (mode === 'directory' ? '文件夹' : '文件');
+
+const formatUploadSize = (size: number) => {
+  if (size >= 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  if (size >= 1024) {
+    return `${Math.round(size / 1024)} KB`;
+  }
+
+  return `${size} B`;
+};
+
+const getUploadTargetLabel = (options: UploadOptions) =>
+  normalizeFolderPath(options.fallbackPath || options.sectionRoot || DEFAULT_UPLOAD_FOLDER) ||
+  DEFAULT_UPLOAD_FOLDER;
+
+const joinUploadPreviewPath = (...segments: string[]) =>
+  normalizeFolderPath(segments.join('/').replace(/\\/g, '/'));
+
+const getFileUploadRelativePath = (file: UploadableFile) =>
+  file.uploadRelativePath?.trim() || file.webkitRelativePath?.trim() || '';
+
+const getUploadPreviewDirectoryPaths = (selectedFiles: UploadableFile[], options: UploadOptions) => {
+  const fallbackDirectory = getUploadTargetLabel(options);
+
+  return selectedFiles.map((file) => {
+    const nativeRelativePath = getFileUploadRelativePath(file);
+    if (!nativeRelativePath) {
+      return fallbackDirectory;
+    }
+
+    const relativePath = joinUploadPreviewPath(options.sectionRoot ?? '', nativeRelativePath);
+    const segments = relativePath.split('/').filter(Boolean);
+    return segments.length > 1 ? segments.slice(0, -1).join('/') : fallbackDirectory;
+  });
+};
+
 const normalizeInitialFiles = (files: DocumentClassificationSectionProps['initialFiles']) =>
   (files ?? []).map((file, index) => {
     const directoryPath = normalizeFolderPath(file.path) || DIRECTORY_PLACEHOLDER;
@@ -290,7 +403,7 @@ const UploadActionMenu = ({
             setIsOpen(true);
           }
         }}
-        className={buttonClassName}
+        className={`${buttonClassName} disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:hover:bg-gray-200`}
       >
         {isUploading ? (
           <>
@@ -405,10 +518,14 @@ export const DocumentClassificationSection = ({
   const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<UploadSummaryState | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<PendingUploadState | null>(null);
   const [isReparsingFailedFiles, setIsReparsingFailedFiles] = useState(false);
   const [showParseFailuresPopover, setShowParseFailuresPopover] = useState(false);
   const [addingTagId, setAddingTagId] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState('');
+  const [visibleFileLimit, setVisibleFileLimit] = useState(FILES_PAGE_SIZE);
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const [folderNameInput, setFolderNameInput] = useState('');
   const [folderDialogError, setFolderDialogError] = useState('');
@@ -420,6 +537,10 @@ export const DocumentClassificationSection = ({
   const selectedFolderRef = useRef(selectedFolder);
   const currentUploadTargetRef = useRef<string>(DEFAULT_UPLOAD_FOLDER);
   const parseFailuresPopoverTimerRef = useRef<number | null>(null);
+  const uploadProgressDismissTimerRef = useRef<number | null>(null);
+  const uploadSummaryDismissTimerRef = useRef<number | null>(null);
+  const uploadJobSequenceRef = useRef(0);
+  const activeUploadJobRef = useRef<{ id: number; cancelled: boolean } | null>(null);
 
   useEffect(() => {
     selectedFolderRef.current = selectedFolder;
@@ -429,6 +550,12 @@ export const DocumentClassificationSection = ({
     return () => {
       if (parseFailuresPopoverTimerRef.current) {
         window.clearTimeout(parseFailuresPopoverTimerRef.current);
+      }
+      if (uploadProgressDismissTimerRef.current) {
+        window.clearTimeout(uploadProgressDismissTimerRef.current);
+      }
+      if (uploadSummaryDismissTimerRef.current) {
+        window.clearTimeout(uploadSummaryDismissTimerRef.current);
       }
     };
   }, []);
@@ -449,6 +576,11 @@ export const DocumentClassificationSection = ({
       ),
     [groupedFiles, selectedFolder],
   );
+  const visibleCurrentFiles = useMemo(
+    () => currentFiles.slice(0, visibleFileLimit),
+    [currentFiles, visibleFileLimit],
+  );
+  const hasMoreCurrentFiles = visibleCurrentFiles.length < currentFiles.length;
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
   const breadcrumbs = useMemo(() => buildBreadcrumbs(selectedFolder), [selectedFolder]);
   const isInterviewFolderSelected = selectedFolder.split('/').filter(Boolean)[0] === INTERVIEW_FOLDER;
@@ -467,6 +599,10 @@ export const DocumentClassificationSection = ({
   useEffect(() => {
     onFilesStateChange?.(files.length > 0);
   }, [files, onFilesStateChange]);
+
+  useEffect(() => {
+    setVisibleFileLimit(FILES_PAGE_SIZE);
+  }, [files.length, selectedFolder]);
 
   const openCreateFolderDialog = (parentPath: string) => {
     setFolderDialog({
@@ -498,33 +634,285 @@ export const DocumentClassificationSection = ({
     setFolderDialogError('');
   };
 
+  const clearUploadProgressDismissTimer = () => {
+    if (uploadProgressDismissTimerRef.current) {
+      window.clearTimeout(uploadProgressDismissTimerRef.current);
+      uploadProgressDismissTimerRef.current = null;
+    }
+  };
+
+  const clearUploadSummaryDismissTimer = () => {
+    if (uploadSummaryDismissTimerRef.current) {
+      window.clearTimeout(uploadSummaryDismissTimerRef.current);
+      uploadSummaryDismissTimerRef.current = null;
+    }
+  };
+
+  const closeUploadSummary = () => {
+    clearUploadSummaryDismissTimer();
+    setUploadSummary(null);
+  };
+
+  const scheduleUploadSummaryDismiss = () => {
+    clearUploadSummaryDismissTimer();
+    uploadSummaryDismissTimerRef.current = window.setTimeout(() => {
+      setUploadSummary(null);
+      uploadSummaryDismissTimerRef.current = null;
+    }, 5000);
+  };
+
+  const scheduleUploadProgressDismiss = (
+    uploadId: number,
+    delay = UPLOAD_PROGRESS_DISMISS_DELAY_MS,
+  ) => {
+    clearUploadProgressDismissTimer();
+    uploadProgressDismissTimerRef.current = window.setTimeout(() => {
+      setUploadProgress((previous) => (previous?.id === uploadId ? null : previous));
+      uploadProgressDismissTimerRef.current = null;
+    }, delay);
+  };
+
+  const cancelActiveUpload = () => {
+    if (!activeUploadJobRef.current) {
+      return;
+    }
+
+    activeUploadJobRef.current.cancelled = true;
+    setUploadProgress((previous) =>
+      previous && previous.status === 'processing'
+        ? { ...previous, status: 'cancelling', message: '正在停止导入...' }
+        : previous,
+    );
+  };
+
+  const collectDirectoryFiles = async (
+    directoryHandle: FileSystemDirectoryHandleLike,
+    parentPath = directoryHandle.name,
+  ): Promise<UploadableFile[]> => {
+    const collectedFiles: UploadableFile[] = [];
+
+    for await (const [, entryHandle] of directoryHandle.entries()) {
+      const nextPath = joinUploadPreviewPath(parentPath, entryHandle.name);
+
+      if (entryHandle.kind === 'file') {
+        const file = (await entryHandle.getFile()) as UploadableFile;
+        file.uploadRelativePath = nextPath;
+        collectedFiles.push(file);
+        continue;
+      }
+
+      collectedFiles.push(...(await collectDirectoryFiles(entryHandle, nextPath)));
+    }
+
+    return collectedFiles;
+  };
+
+  const openUploadConfirmation = (
+    selectedFiles: UploadableFile[],
+    options: UploadOptions,
+    mode: UploadMode,
+    inputElement?: HTMLInputElement,
+    rootFolderName = getUploadTargetLabel(options),
+  ) => {
+    if (selectedFiles.length === 0) {
+      if (inputElement) {
+        inputElement.value = '';
+      }
+      return;
+    }
+
+    const previewDirectoryPaths = getUploadPreviewDirectoryPaths(selectedFiles, options);
+
+    setPendingUpload({
+      mode,
+      selectedFiles,
+      options,
+      inputElement,
+      totalFiles: selectedFiles.length,
+      totalDirectories: mergeFolderPaths(previewDirectoryPaths).length,
+      totalSize: selectedFiles.reduce((total, file) => total + file.size, 0),
+      targetLabel: getUploadTargetLabel(options),
+      rootFolderName,
+      sampleFileNames: selectedFiles.slice(0, 4).map((file) => file.name),
+    });
+  };
+
+  const closeUploadConfirmation = () => {
+    if (pendingUpload?.inputElement) {
+      pendingUpload.inputElement.value = '';
+    }
+    setPendingUpload(null);
+  };
+
+  const confirmPendingUpload = () => {
+    if (!pendingUpload) {
+      return;
+    }
+
+    const uploadToStart = pendingUpload;
+    setPendingUpload(null);
+    appendUploadedFiles(
+      uploadToStart.selectedFiles,
+      uploadToStart.options,
+      uploadToStart.mode,
+      uploadToStart.inputElement,
+    );
+  };
+
   const appendUploadedFiles = (
-    selectedFiles: File[],
-    options: { sectionRoot?: string; fallbackPath?: string },
-    inputElement: HTMLInputElement,
+    selectedFiles: UploadableFile[],
+    options: UploadOptions,
+    mode: UploadMode,
+    inputElement?: HTMLInputElement,
   ) => {
     if (selectedFiles.length === 0) {
       return;
     }
 
-    try {
-      setIsUploading(true);
+    void (async () => {
+      const uploadId = uploadJobSequenceRef.current + 1;
+      uploadJobSequenceRef.current = uploadId;
+      activeUploadJobRef.current = { id: uploadId, cancelled: false };
+      clearUploadProgressDismissTimer();
+
+      const targetLabel = getUploadTargetLabel(options);
+      const previewDirectoryPaths = getUploadPreviewDirectoryPaths(selectedFiles, options);
+      const totalDirectories = mergeFolderPaths(previewDirectoryPaths).length;
       const uploadTimeLabel = formatUploadTime();
-      const uploadedFiles = generateKnowledgeDocuments(selectedFiles, options).map((file) => ({
-        ...file,
-        updatedAtLabel: uploadTimeLabel,
-      }));
-      setFiles((previous) => [...previous, ...uploadedFiles]);
-      setFolderPaths((previous) =>
-        mergeFolderPaths(previous, uploadedFiles.map((file) => file.directoryPath)),
-      );
+      const uploadedFiles: KnowledgeDocument[] = [];
+
+      setIsUploading(true);
+      clearUploadSummaryDismissTimer();
+      setUploadSummary(null);
+      setUploadProgress({
+        id: uploadId,
+        mode,
+        status: 'processing',
+        totalFiles: selectedFiles.length,
+        processedFiles: 0,
+        totalDirectories,
+        failedFiles: 0,
+        currentFileName: '',
+        targetLabel,
+        message: '正在读取本地文件...',
+      });
       setSelectedFileId(null);
-    } catch (error) {
-      console.error('Failed to process uploaded files in detail section:', error);
-    } finally {
-      setIsUploading(false);
-      inputElement.value = '';
-    }
+
+      await waitForUploadBatch();
+
+      try {
+        for (let startIndex = 0; startIndex < selectedFiles.length; startIndex += UPLOAD_BATCH_SIZE) {
+          const activeJob = activeUploadJobRef.current;
+          if (!activeJob || activeJob.id !== uploadId || activeJob.cancelled) {
+            setUploadProgress((previous) =>
+              previous?.id === uploadId
+                ? {
+                    ...previous,
+                    status: 'cancelled',
+                    message: '已取消导入，未写入资料库。',
+                  }
+                : previous,
+            );
+            scheduleUploadProgressDismiss(uploadId);
+            return;
+          }
+
+          const fileBatch = selectedFiles.slice(startIndex, startIndex + UPLOAD_BATCH_SIZE);
+          const uploadedBatch = generateKnowledgeDocuments(fileBatch, options).map((file, index) => ({
+            ...file,
+            id: `${file.id}-${uploadId}-${startIndex + index}`,
+            updatedAtLabel: uploadTimeLabel,
+          }));
+
+          uploadedFiles.push(...uploadedBatch);
+
+          const processedFiles = Math.min(startIndex + fileBatch.length, selectedFiles.length);
+          const currentFileName = fileBatch.at(-1)?.name ?? '';
+          const failedFileCount = uploadedFiles.filter((file) => file.parseStatus === 'failed').length;
+
+          setUploadProgress((previous) =>
+            previous?.id === uploadId
+              ? {
+                  ...previous,
+                  processedFiles,
+                  currentFileName,
+                  failedFiles: failedFileCount,
+                  message:
+                    processedFiles === selectedFiles.length
+                      ? '正在写入资料目录...'
+                      : '正在整理文件结构...',
+                }
+              : previous,
+          );
+
+          await waitForUploadBatch();
+        }
+
+        const activeJob = activeUploadJobRef.current;
+        if (!activeJob || activeJob.id !== uploadId || activeJob.cancelled) {
+          setUploadProgress((previous) =>
+            previous?.id === uploadId
+              ? {
+                  ...previous,
+                  status: 'cancelled',
+                  message: '已取消导入，未写入资料库。',
+                }
+              : previous,
+          );
+          scheduleUploadProgressDismiss(uploadId);
+          return;
+        }
+
+        const failedFileCount = uploadedFiles.filter((file) => file.parseStatus === 'failed').length;
+        const uploadedDirectoryCount = mergeFolderPaths(uploadedFiles.map((file) => file.directoryPath)).length;
+
+        setFiles((previous) => [...previous, ...uploadedFiles]);
+        setFolderPaths((previous) =>
+          mergeFolderPaths(previous, uploadedFiles.map((file) => file.directoryPath)),
+        );
+        setUploadSummary({
+          mode,
+          totalFiles: uploadedFiles.length,
+          totalDirectories: uploadedDirectoryCount,
+          failedFiles: failedFileCount,
+          targetLabel,
+          uploadedAtLabel: uploadTimeLabel,
+        });
+        scheduleUploadSummaryDismiss();
+        setUploadProgress((previous) =>
+          previous?.id === uploadId
+            ? {
+                ...previous,
+                status: 'complete',
+                processedFiles: selectedFiles.length,
+                currentFileName: '',
+                failedFiles: failedFileCount,
+                message: '导入完成',
+              }
+            : previous,
+        );
+        scheduleUploadProgressDismiss(uploadId);
+      } catch (error) {
+        console.error('Failed to process uploaded files in detail section:', error);
+        setUploadProgress((previous) =>
+          previous?.id === uploadId
+            ? {
+                ...previous,
+                status: 'failed',
+                message: '导入失败，请重新选择文件。',
+              }
+            : previous,
+        );
+      } finally {
+        if (activeUploadJobRef.current?.id === uploadId) {
+          activeUploadJobRef.current = null;
+        }
+        setIsUploading(false);
+        if (inputElement) {
+          inputElement.value = '';
+        }
+      }
+    })();
   };
 
   const handleDirectoryUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -533,13 +921,15 @@ export const DocumentClassificationSection = ({
     }
 
     const inputElement = event.currentTarget;
-    const selectedFiles = Array.from(event.target.files as FileList) as File[];
+    const selectedFiles = Array.from(event.target.files as FileList) as UploadableFile[];
     const currentFolder = selectedFolderRef.current;
 
-    appendUploadedFiles(
+    openUploadConfirmation(
       selectedFiles,
       { sectionRoot: currentFolder || DEFAULT_UPLOAD_FOLDER },
+      'directory',
       inputElement,
+      selectedFiles[0]?.webkitRelativePath?.split('/').filter(Boolean)[0] ?? DEFAULT_UPLOAD_FOLDER,
     );
   };
 
@@ -549,16 +939,21 @@ export const DocumentClassificationSection = ({
     }
 
     const inputElement = event.currentTarget;
-    const selectedFiles = Array.from(event.target.files as FileList) as File[];
+    const selectedFiles = Array.from(event.target.files as FileList) as UploadableFile[];
 
     appendUploadedFiles(
       selectedFiles,
       { fallbackPath: currentUploadTargetRef.current || DEFAULT_UPLOAD_FOLDER },
+      'files',
       inputElement,
     );
   };
 
   const triggerSingleUpload = (path: string) => {
+    if (isUploading) {
+      return;
+    }
+
     currentUploadTargetRef.current = path || DEFAULT_UPLOAD_FOLDER;
     const input = fileInputRef.current;
     if (!input) {
@@ -571,7 +966,37 @@ export const DocumentClassificationSection = ({
     });
   };
 
-  const triggerDirectoryUpload = () => {
+  const triggerDirectoryUpload = async () => {
+    if (isUploading) {
+      return;
+    }
+
+    const showDirectoryPicker = (
+      window as Window & {
+        showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike>;
+      }
+    ).showDirectoryPicker;
+
+    if (showDirectoryPicker) {
+      try {
+        const directoryHandle = await showDirectoryPicker();
+        const selectedFiles = await collectDirectoryFiles(directoryHandle);
+        openUploadConfirmation(
+          selectedFiles,
+          { sectionRoot: selectedFolderRef.current || DEFAULT_UPLOAD_FOLDER },
+          'directory',
+          undefined,
+          directoryHandle.name,
+        );
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to read selected directory:', error);
+      }
+    }
+
     const input = dirInputRef.current;
     if (!input) {
       return;
@@ -880,6 +1305,13 @@ export const DocumentClassificationSection = ({
   };
 
   const hasMaterials = folderPaths.length > 0 || files.length > 0;
+  const uploadProgressPercent = uploadProgress
+    ? Math.round((uploadProgress.processedFiles / Math.max(uploadProgress.totalFiles, 1)) * 100)
+    : 0;
+  const canDismissUploadProgress =
+    uploadProgress?.status === 'complete' ||
+    uploadProgress?.status === 'failed' ||
+    uploadProgress?.status === 'cancelled';
 
   return (
     <section className="space-y-4">
@@ -905,6 +1337,33 @@ export const DocumentClassificationSection = ({
         multiple
         onChange={handleSingleFileUpload}
       />
+
+      {uploadSummary && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-emerald-600">
+              {uploadSummary.failedFiles > 0 ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-gray-800">
+                通过{formatUploadModeLabel(uploadSummary.mode)}导入 {uploadSummary.totalFiles} 个文件
+                {uploadSummary.totalDirectories > 0 ? `，还原 ${uploadSummary.totalDirectories} 个目录` : ''}
+              </div>
+              <div className="mt-1 truncate text-xs text-gray-500">
+                目标：{uploadSummary.targetLabel} · {uploadSummary.uploadedAtLabel}
+                {uploadSummary.failedFiles > 0 ? ` · ${uploadSummary.failedFiles} 个文件需重新解析` : ''}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={closeUploadSummary}
+            className="rounded-full p-1.5 text-emerald-700 transition-colors hover:bg-white"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {hasMaterials ? (
         <div className={`grid gap-4 ${selectedFile ? 'xl:grid-cols-[220px_minmax(0,1fr)_320px]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
@@ -952,6 +1411,11 @@ export const DocumentClassificationSection = ({
                       ))}
                     </div>
                   )}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                    <span>{currentFolders.length} 个子目录</span>
+                    <span>{currentFiles.length} 个文件</span>
+                    {hasMoreCurrentFiles && <span>已显示 {visibleCurrentFiles.length} 个</span>}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -1097,7 +1561,7 @@ export const DocumentClassificationSection = ({
                     <span className="text-right">操作</span>
                   </div>
 
-                  {currentFiles.map((file) => {
+                  {visibleCurrentFiles.map((file) => {
                     const isSelected = selectedFile?.id === file.id;
 
                     return (
@@ -1157,6 +1621,20 @@ export const DocumentClassificationSection = ({
                       </div>
                     );
                   })}
+
+                  {hasMoreCurrentFiles && (
+                    <div className="border-t border-gray-100 px-2 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVisibleFileLimit((previous) => previous + FILES_PAGE_SIZE)
+                        }
+                        className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100"
+                      >
+                        加载更多文件（剩余 {currentFiles.length - visibleCurrentFiles.length} 个）
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-10 text-center text-sm text-gray-400">
@@ -1323,6 +1801,213 @@ export const DocumentClassificationSection = ({
               onDirectoryUpload={triggerDirectoryUpload}
               buttonClassName="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
             />
+          </div>
+        </div>
+      )}
+
+      {pendingUpload && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 bg-slate-50 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-100">
+                    {pendingUpload.mode === 'directory' ? <FolderTree size={22} /> : <Files size={22} />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-gray-900">确认导入资料</h3>
+                    <p className="mt-1 text-sm leading-6 text-gray-500">
+                      将「{pendingUpload.rootFolderName}」导入到「{pendingUpload.targetLabel}」，目录结构会保留到资料库。
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeUploadConfirmation}
+                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-white hover:text-gray-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 py-5">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-gray-400">文件数量</div>
+                  <div className="mt-1 text-xl font-bold text-gray-900">{pendingUpload.totalFiles}</div>
+                </div>
+                <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-gray-400">目录数量</div>
+                  <div className="mt-1 text-xl font-bold text-gray-900">{pendingUpload.totalDirectories}</div>
+                </div>
+                <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-gray-400">总大小</div>
+                  <div className="mt-1 truncate text-xl font-bold text-gray-900">
+                    {formatUploadSize(pendingUpload.totalSize)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-[10px] font-bold uppercase text-gray-400">文件预览</div>
+                  {pendingUpload.totalFiles > pendingUpload.sampleFileNames.length && (
+                    <div className="text-xs font-medium text-gray-400">
+                      另有 {pendingUpload.totalFiles - pendingUpload.sampleFileNames.length} 个文件
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {pendingUpload.sampleFileNames.map((fileName, index) => (
+                    <div
+                      key={`${fileName}-${index}`}
+                      className="flex min-w-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs text-gray-600"
+                    >
+                      <FileText size={13} className="shrink-0 text-indigo-500" />
+                      <span className="truncate">{fileName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-700">
+                导入会在右下角显示进度，期间可以继续查看、编辑或切换其它资料目录。
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+              <button
+                type="button"
+                onClick={closeUploadConfirmation}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={confirmPendingUpload}
+                disabled={isUploading}
+                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+              >
+                开始导入
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {uploadProgress && (
+        <div className="pointer-events-none fixed bottom-5 right-5 z-[130] w-[calc(100vw-2rem)] max-w-sm">
+          <div className="pointer-events-auto rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                    uploadProgress.status === 'complete'
+                      ? 'bg-emerald-50 text-emerald-600'
+                      : uploadProgress.status === 'failed' || uploadProgress.status === 'cancelled'
+                        ? 'bg-red-50 text-red-600'
+                        : 'bg-blue-50 text-blue-600'
+                  }`}
+                >
+                  {uploadProgress.status === 'complete' ? (
+                    <CheckCircle2 size={18} />
+                  ) : uploadProgress.status === 'failed' || uploadProgress.status === 'cancelled' ? (
+                    <AlertCircle size={18} />
+                  ) : (
+                    <Loader2 size={18} className="animate-spin" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-gray-900">
+                    {uploadProgress.status === 'complete'
+                      ? '资料导入完成'
+                      : uploadProgress.status === 'failed'
+                        ? '导入失败'
+                        : uploadProgress.status === 'cancelled'
+                          ? '已取消导入'
+                          : '正在批量导入'}
+                  </h3>
+                  <p className="mt-1 truncate text-xs text-gray-500">{uploadProgress.message}</p>
+                </div>
+              </div>
+              {canDismissUploadProgress && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearUploadProgressDismissTimer();
+                    setUploadProgress(null);
+                  }}
+                  className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-gray-500">
+                <span>
+                  {uploadProgress.processedFiles}/{uploadProgress.totalFiles} 个文件
+                </span>
+                <span>{uploadProgressPercent}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    uploadProgress.status === 'failed' || uploadProgress.status === 'cancelled'
+                      ? 'bg-red-500'
+                      : uploadProgress.status === 'complete'
+                        ? 'bg-emerald-500'
+                        : 'bg-blue-600'
+                  }`}
+                  style={{ width: `${uploadProgressPercent}%` }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-gray-400">
+                <span className="min-w-0 truncate">目标：{uploadProgress.targetLabel}</span>
+                <span className="shrink-0">{uploadProgress.totalDirectories} 个目录</span>
+              </div>
+              {uploadProgress.currentFileName && (
+                <div className="mt-1 truncate text-[11px] text-gray-400">
+                  当前：{uploadProgress.currentFileName}
+                </div>
+              )}
+              {uploadProgress.failedFiles > 0 && (
+                <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700">
+                  {uploadProgress.failedFiles} 个文件首次解析未完成，导入后可统一重新解析。
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-3">
+              {uploadProgress.status === 'processing' || uploadProgress.status === 'cancelling' ? (
+                <button
+                  type="button"
+                  onClick={cancelActiveUpload}
+                  disabled={uploadProgress.status === 'cancelling'}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    uploadProgress.status === 'cancelling'
+                      ? 'cursor-wait border-gray-200 bg-gray-100 text-gray-400'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {uploadProgress.status === 'cancelling' ? '正在取消...' : '取消导入'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearUploadProgressDismissTimer();
+                    setUploadProgress(null);
+                  }}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+                >
+                  知道了
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

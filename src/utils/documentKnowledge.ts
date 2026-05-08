@@ -199,7 +199,8 @@ const getInitialParseFailureReason = (fileName: string, extension: string) => {
 };
 
 const getRelativePath = (file: File, options?: GenerateOptions) => {
-  const nativeRelativePath = file.webkitRelativePath?.trim();
+  const providedRelativePath = (file as File & { uploadRelativePath?: string }).uploadRelativePath?.trim();
+  const nativeRelativePath = providedRelativePath || file.webkitRelativePath?.trim();
 
   if (nativeRelativePath) {
     return options?.sectionRoot
