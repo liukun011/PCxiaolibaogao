@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  Files,
   FileText,
   FolderPlus,
   FolderTree,
@@ -98,12 +97,7 @@ type PendingUploadState = {
   selectedFiles: UploadableFile[];
   options: UploadOptions;
   inputElement?: HTMLInputElement;
-  totalFiles: number;
-  totalDirectories: number;
-  totalSize: number;
   targetLabel: string;
-  rootFolderName: string;
-  sampleFileNames: string[];
 };
 
 type FileSystemFileHandleLike = {
@@ -278,22 +272,6 @@ const waitForUploadBatch = () =>
   });
 
 const formatUploadModeLabel = (mode: UploadMode) => (mode === 'directory' ? '文件夹' : '文件');
-
-const formatUploadSize = (size: number) => {
-  if (size >= 1024 * 1024 * 1024) {
-    return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  }
-
-  if (size >= 1024 * 1024) {
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  if (size >= 1024) {
-    return `${Math.round(size / 1024)} KB`;
-  }
-
-  return `${size} B`;
-};
 
 const getUploadTargetLabel = (options: UploadOptions) =>
   normalizeFolderPath(options.fallbackPath || options.sectionRoot || DEFAULT_UPLOAD_FOLDER) ||
@@ -712,7 +690,6 @@ export const DocumentClassificationSection = ({
     options: UploadOptions,
     mode: UploadMode,
     inputElement?: HTMLInputElement,
-    rootFolderName = getUploadTargetLabel(options),
   ) => {
     if (selectedFiles.length === 0) {
       if (inputElement) {
@@ -721,19 +698,12 @@ export const DocumentClassificationSection = ({
       return;
     }
 
-    const previewDirectoryPaths = getUploadPreviewDirectoryPaths(selectedFiles, options);
-
     setPendingUpload({
       mode,
       selectedFiles,
       options,
       inputElement,
-      totalFiles: selectedFiles.length,
-      totalDirectories: mergeFolderPaths(previewDirectoryPaths).length,
-      totalSize: selectedFiles.reduce((total, file) => total + file.size, 0),
       targetLabel: getUploadTargetLabel(options),
-      rootFolderName,
-      sampleFileNames: selectedFiles.slice(0, 4).map((file) => file.name),
     });
   };
 
@@ -745,7 +715,7 @@ export const DocumentClassificationSection = ({
   };
 
   const confirmPendingUpload = () => {
-    if (!pendingUpload) {
+    if (!pendingUpload || isUploading) {
       return;
     }
 
@@ -929,7 +899,6 @@ export const DocumentClassificationSection = ({
       { sectionRoot: currentFolder || DEFAULT_UPLOAD_FOLDER },
       'directory',
       inputElement,
-      selectedFiles[0]?.webkitRelativePath?.split('/').filter(Boolean)[0] ?? DEFAULT_UPLOAD_FOLDER,
     );
   };
 
@@ -941,7 +910,7 @@ export const DocumentClassificationSection = ({
     const inputElement = event.currentTarget;
     const selectedFiles = Array.from(event.target.files as FileList) as UploadableFile[];
 
-    appendUploadedFiles(
+    openUploadConfirmation(
       selectedFiles,
       { fallbackPath: currentUploadTargetRef.current || DEFAULT_UPLOAD_FOLDER },
       'files',
@@ -985,8 +954,6 @@ export const DocumentClassificationSection = ({
           selectedFiles,
           { sectionRoot: selectedFolderRef.current || DEFAULT_UPLOAD_FOLDER },
           'directory',
-          undefined,
-          directoryHandle.name,
         );
         return;
       } catch (error) {
@@ -1807,76 +1774,26 @@ export const DocumentClassificationSection = ({
 
       {pendingUpload && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="border-b border-gray-100 bg-slate-50 px-6 py-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-100">
-                    {pendingUpload.mode === 'directory' ? <FolderTree size={22} /> : <Files size={22} />}
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-bold text-gray-900">确认导入资料</h3>
-                    <p className="mt-1 text-sm leading-6 text-gray-500">
-                      将「{pendingUpload.rootFolderName}」导入到「{pendingUpload.targetLabel}」，目录结构会保留到资料库。
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeUploadConfirmation}
-                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-white hover:text-gray-600"
-                >
-                  <X size={18} />
-                </button>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-gray-900">
+                  确认导入{formatUploadModeLabel(pendingUpload.mode)}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  是否导入到「{pendingUpload.targetLabel}」？
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={closeUploadConfirmation}
+                className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="px-6 py-5">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                  <div className="text-[10px] font-bold uppercase text-gray-400">文件数量</div>
-                  <div className="mt-1 text-xl font-bold text-gray-900">{pendingUpload.totalFiles}</div>
-                </div>
-                <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                  <div className="text-[10px] font-bold uppercase text-gray-400">目录数量</div>
-                  <div className="mt-1 text-xl font-bold text-gray-900">{pendingUpload.totalDirectories}</div>
-                </div>
-                <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                  <div className="text-[10px] font-bold uppercase text-gray-400">总大小</div>
-                  <div className="mt-1 truncate text-xl font-bold text-gray-900">
-                    {formatUploadSize(pendingUpload.totalSize)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-[10px] font-bold uppercase text-gray-400">文件预览</div>
-                  {pendingUpload.totalFiles > pendingUpload.sampleFileNames.length && (
-                    <div className="text-xs font-medium text-gray-400">
-                      另有 {pendingUpload.totalFiles - pendingUpload.sampleFileNames.length} 个文件
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {pendingUpload.sampleFileNames.map((fileName, index) => (
-                    <div
-                      key={`${fileName}-${index}`}
-                      className="flex min-w-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs text-gray-600"
-                    >
-                      <FileText size={13} className="shrink-0 text-indigo-500" />
-                      <span className="truncate">{fileName}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-700">
-                导入会在右下角显示进度，期间可以继续查看、编辑或切换其它资料目录。
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+            <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={closeUploadConfirmation}
@@ -1888,9 +1805,9 @@ export const DocumentClassificationSection = ({
                 type="button"
                 onClick={confirmPendingUpload}
                 disabled={isUploading}
-                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
               >
-                开始导入
+                确认导入
               </button>
             </div>
           </div>
