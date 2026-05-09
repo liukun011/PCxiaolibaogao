@@ -106,6 +106,7 @@ export const TemplatesView = ({
   onOpenTemplate: (template: TemplateItem, isNew?: boolean) => void;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sampleInputRef = useRef<HTMLInputElement>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "parsing">("idle");
   const [uploadModal, setUploadModal] = useState<{
@@ -118,6 +119,17 @@ export const TemplatesView = ({
   }>({ isOpen: false, category: TEMPLATE_OPTIONS[0].id, applicationScope: "personal", name: "", description: "", file: null });
   const [uploadModalError, setUploadModalError] = useState("");
   const uploadTimersRef = useRef<number[]>([]);
+  const [sampleGenerateStatus, setSampleGenerateStatus] = useState<"idle" | "uploading" | "generating">("idle");
+  const [sampleGenerateModal, setSampleGenerateModal] = useState<{
+    isOpen: boolean;
+    category: string;
+    applicationScope: TemplateScope;
+    name: string;
+    description: string;
+    files: File[];
+  }>({ isOpen: false, category: TEMPLATE_OPTIONS[0].id, applicationScope: "personal", name: "", description: "", files: [] });
+  const [sampleGenerateError, setSampleGenerateError] = useState("");
+  const sampleGenerateTimersRef = useRef<number[]>([]);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     action: "enable" | "disable" | "delete" | null;
@@ -134,6 +146,7 @@ export const TemplatesView = ({
   useEffect(() => {
     return () => {
       uploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      sampleGenerateTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     };
   }, []);
 
@@ -143,6 +156,7 @@ export const TemplatesView = ({
       .toLowerCase()
       .includes(searchKeyword.trim().toLowerCase()),
   );
+  const isTemplateActionBusy = uploadStatus !== "idle" || sampleGenerateStatus !== "idle";
 
   const handleUploadClick = () => {
     setUploadModal({
@@ -252,6 +266,114 @@ export const TemplatesView = ({
     uploadTimersRef.current.push(uploadTimer, finishTimer);
   };
 
+  const handleSampleGenerateClick = () => {
+    setSampleGenerateModal({
+      isOpen: true,
+      category: TEMPLATE_OPTIONS[0].id,
+      applicationScope: "personal",
+      name: "",
+      description: "",
+      files: [],
+    });
+    setSampleGenerateError("");
+  };
+
+  const handleSampleFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const invalidFile = files.find((file) => !/\.(doc|docx|md|pdf)$/i.test(file.name));
+
+    if (invalidFile) {
+      setSampleGenerateModal((prev) => ({ ...prev, files: [] }));
+      setSampleGenerateError("仅支持上传 Word、PDF 或 MD 样例文件");
+      event.target.value = "";
+      return;
+    }
+
+    setSampleGenerateModal((prev) => ({
+      ...prev,
+      files,
+      name: prev.name || (files[0] ? `${files[0].name.replace(/\.[^/.]+$/, "")}模板` : prev.name),
+    }));
+    setSampleGenerateError(files.length > 0 && files.length < 2 ? "请至少选择 2 个样例文件" : "");
+  };
+
+  const closeSampleGenerateModal = () => {
+    if (sampleGenerateStatus !== "idle") return;
+    setSampleGenerateModal({
+      isOpen: false,
+      category: TEMPLATE_OPTIONS[0].id,
+      applicationScope: "personal",
+      name: "",
+      description: "",
+      files: [],
+    });
+    setSampleGenerateError("");
+    if (sampleInputRef.current) {
+      sampleInputRef.current.value = "";
+    }
+  };
+
+  const submitSampleGenerate = () => {
+    if (!sampleGenerateModal.category.trim()) {
+      setSampleGenerateError("请选择模板分类");
+      return;
+    }
+
+    if (!sampleGenerateModal.name.trim()) {
+      setSampleGenerateError("请输入模板名称");
+      return;
+    }
+
+    if (sampleGenerateModal.files.length < 2) {
+      setSampleGenerateError("请至少选择 2 个样例文件");
+      return;
+    }
+
+    if (sampleGenerateModal.files.some((file) => !/\.(doc|docx|md|pdf)$/i.test(file.name))) {
+      setSampleGenerateError("仅支持上传 Word、PDF 或 MD 样例文件");
+      return;
+    }
+
+    sampleGenerateTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    sampleGenerateTimersRef.current = [];
+    setSampleGenerateStatus("uploading");
+
+    const uploadTimer = window.setTimeout(() => {
+      setSampleGenerateStatus("generating");
+    }, 900);
+
+    const finishTimer = window.setTimeout(() => {
+      const now = new Date();
+      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const nextTemplate: TemplateItem = {
+        id: `tpl-${Date.now()}`,
+        name: sampleGenerateModal.name.trim(),
+        description: sampleGenerateModal.description.trim() || `基于 ${sampleGenerateModal.files.length} 个样例生成的模板。`,
+        uploader: "当前用户",
+        uploadTime: formatted,
+        status: "enabled",
+        category: sampleGenerateModal.category,
+        applicationScope: sampleGenerateModal.applicationScope,
+      };
+      setTemplates((prev) => [nextTemplate, ...prev]);
+      setSampleGenerateStatus("idle");
+      setSampleGenerateModal({
+        isOpen: false,
+        category: TEMPLATE_OPTIONS[0].id,
+        applicationScope: "personal",
+        name: "",
+        description: "",
+        files: [],
+      });
+      if (sampleInputRef.current) {
+        sampleInputRef.current.value = "";
+      }
+      onOpenTemplate(nextTemplate, true);
+    }, 3000);
+
+    sampleGenerateTimersRef.current.push(uploadTimer, finishTimer);
+  };
+
   const openConfirmModal = (action: "enable" | "disable" | "delete", template: TemplateItem) => {
     setConfirmModal({ isOpen: true, action, template });
   };
@@ -320,8 +442,22 @@ export const TemplatesView = ({
             <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
           <button
+            onClick={handleSampleGenerateClick}
+            disabled={isTemplateActionBusy}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {sampleGenerateStatus === "idle" ? <Sparkles size={16} /> : <RefreshCw size={16} className="animate-spin" />}
+            <span>
+              {sampleGenerateStatus === "uploading"
+                ? "上传样例中..."
+                : sampleGenerateStatus === "generating"
+                  ? "生成模板中..."
+                  : "通过样例生成"}
+            </span>
+          </button>
+          <button
             onClick={handleUploadClick}
-            disabled={uploadStatus !== "idle"}
+            disabled={isTemplateActionBusy}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {uploadStatus === "idle" ? <Plus size={16} /> : <RefreshCw size={16} className="animate-spin" />}
@@ -610,6 +746,206 @@ export const TemplatesView = ({
               </div>
             </motion.div>
           </div>
+        )}
+
+        {sampleGenerateModal.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0"
+              onClick={closeSampleGenerateModal}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">通过样例生成模板</h3>
+                  <p className="mt-1 text-sm text-gray-500">上传多个报告样例，生成可复用的模板配置。</p>
+                </div>
+                <button
+                  onClick={closeSampleGenerateModal}
+                  disabled={sampleGenerateStatus !== "idle"}
+                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-gray-700">
+                    模板分类 <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={sampleGenerateModal.category}
+                    onChange={(event) =>
+                      setSampleGenerateModal((prev) => ({ ...prev, category: event.target.value }))
+                    }
+                    disabled={sampleGenerateStatus !== "idle"}
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {TEMPLATE_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-gray-700">
+                    应用范围 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TEMPLATE_SCOPE_OPTIONS.map((option) => {
+                      const isActive = sampleGenerateModal.applicationScope === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            setSampleGenerateModal((prev) => ({ ...prev, applicationScope: option.id }))
+                          }
+                          disabled={sampleGenerateStatus !== "idle"}
+                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                            isActive
+                              ? "border-blue-500 bg-blue-50 text-blue-700"
+                              : "border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-white"
+                          }`}
+                        >
+                          {option.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-gray-700">
+                    模板名称 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    value={sampleGenerateModal.name}
+                    onChange={(event) =>
+                      setSampleGenerateModal((prev) => ({ ...prev, name: event.target.value }))
+                    }
+                    disabled={sampleGenerateStatus !== "idle"}
+                    placeholder="请输入模板名称，最多50个字符"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-gray-700">模板描述</label>
+                  <textarea
+                    value={sampleGenerateModal.description}
+                    onChange={(event) =>
+                      setSampleGenerateModal((prev) => ({ ...prev, description: event.target.value }))
+                    }
+                    disabled={sampleGenerateStatus !== "idle"}
+                    placeholder="请输入模板描述，最多300个字符"
+                    className="min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-gray-700">
+                    样例文件 <span className="text-red-500">*</span>
+                  </label>
+                  <p className="mb-2 text-xs text-gray-500">至少选择 2 个样例文件。</p>
+                  <button
+                    type="button"
+                    onClick={() => sampleInputRef.current?.click()}
+                    disabled={sampleGenerateStatus !== "idle"}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-4 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-gray-800">
+                        {sampleGenerateModal.files.length > 0
+                          ? `已选择 ${sampleGenerateModal.files.length} 个样例文件`
+                          : "选择本机样例文件"}
+                      </span>
+                      <span className="mt-1 block text-xs text-gray-500">支持 .doc、.docx、.pdf、.md</span>
+                    </span>
+                    <Upload size={18} className="shrink-0 text-blue-600" />
+                  </button>
+                  {sampleGenerateModal.files.length > 0 && (
+                    <div className="mt-2 max-h-28 space-y-1 overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      {sampleGenerateModal.files.map((file) => (
+                        <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 text-xs text-gray-600">
+                          <FileIcon size={14} className="shrink-0 text-blue-500" />
+                          <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    ref={sampleInputRef}
+                    type="file"
+                    multiple
+                    accept=".doc,.docx,.pdf,.md"
+                    className="hidden"
+                    onChange={handleSampleFilesChange}
+                  />
+                </div>
+
+                {sampleGenerateError && (
+                  <p className="text-xs font-medium text-red-500">{sampleGenerateError}</p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={closeSampleGenerateModal}
+                  disabled={sampleGenerateStatus !== "idle"}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={submitSampleGenerate}
+                  disabled={sampleGenerateStatus !== "idle"}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {sampleGenerateStatus === "idle" ? <Sparkles size={16} /> : <RefreshCw size={16} className="animate-spin" />}
+                  <span>
+                    {sampleGenerateStatus === "uploading"
+                      ? "上传中..."
+                      : sampleGenerateStatus === "generating"
+                        ? "生成中..."
+                        : "生成模板"}
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {sampleGenerateStatus !== "idle" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-40 flex items-center justify-center rounded-3xl bg-white/60 backdrop-blur-sm"
+          >
+            <div className="flex min-w-[260px] flex-col items-center gap-5 rounded-3xl bg-white px-8 py-8 shadow-xl">
+              <div className="relative flex h-16 w-16 items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+                <div className="absolute inset-0 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                {sampleGenerateStatus === "generating" && <Sparkles size={24} className="text-blue-600" />}
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-800">{sampleGenerateStatus === "uploading" ? "正在上传样例..." : "正在生成模板..."}</p>
+                <p className="mt-1 text-sm text-gray-500">{sampleGenerateStatus === "uploading" ? "请稍候，样例文件传输中" : "AI 正在归纳样例结构与字段规则"}</p>
+              </div>
+            </div>
+          </motion.div>
         )}
 
         {uploadStatus !== "idle" && (
