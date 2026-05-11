@@ -102,7 +102,16 @@ type ReportBlockConfig = {
   dataSource: string;
   extractionRule: string;
   businessRule: string;
-  sourceFiles: Array<{ name: string; detail: string }>;
+  sourceFiles: ReportDataSource[];
+};
+
+type DataSourceType = "file" | "database" | "recordTable" | "audio";
+
+type ReportDataSource = {
+  name: string;
+  detail: string;
+  type?: DataSourceType;
+  location?: string;
 };
 
 export const EditReportView = ({
@@ -129,6 +138,8 @@ export const EditReportView = ({
   const editTargetRefs = useRef<Record<string, HTMLElement | SVGElement | null>>({});
   const [activeEditTargetId, setActiveEditTargetId] = useState<string | null>(null);
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewData | null>(null);
+  const generationProcessPanelRef = useRef<HTMLDivElement>(null);
+  const [showGenerationProcessPanel, setShowGenerationProcessPanel] = useState(false);
   const templateUploadInputRef = useRef<HTMLInputElement>(null);
   const templateUploadTimersRef = useRef<number[]>([]);
   const [templateUploadStatus, setTemplateUploadStatus] = useState<"idle" | "uploading" | "parsing">("idle");
@@ -162,6 +173,19 @@ export const EditReportView = ({
       templateUploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     };
   }, []);
+
+  useEffect(() => {
+    if (!showGenerationProcessPanel) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!generationProcessPanelRef.current?.contains(event.target as Node)) {
+        setShowGenerationProcessPanel(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [showGenerationProcessPanel]);
 
   useEffect(() => {
     if (!templates.length) {
@@ -830,7 +854,7 @@ export const EditReportView = ({
       fieldName: field.name,
       currentRule: field.rule,
       dataSource: field.source,
-      businessRule: field.status === "conflict" ? "存在多来源口径差异，需人工确认后再写入报告。" : "字段内容可直接写入报告，保持与来源文件一致。",
+      businessRule: field.status === "conflict" ? "存在多来源口径差异，需人工确认后再写入报告。" : "字段内容可直接写入报告，保持与数据来源一致。",
     });
   };
 
@@ -856,24 +880,498 @@ export const EditReportView = ({
     setActiveEditTargetId(`report-block-${blockId}`);
   };
 
-  const openSourceFileDetail = (
-    field: typeof aiGeneratedFields[number],
-    file: { name: string; detail: string },
-  ) => {
-    const target = window.open("", "_blank", "noopener,noreferrer");
-    if (!target) return;
+  const inferDataSourceType = (name: string): DataSourceType => {
+    if (/(\.mp3|\.wav|\.m4a|\.aac|\.flac)$/i.test(name) || name.includes("录音")) {
+      return "audio";
+    }
+    return "file";
+  };
 
-    target.document.write(`
+  const getDataSourceTypeMeta = (type: DataSourceType = "file") => {
+    if (type === "database") {
+      return {
+        label: "数据库表",
+        iconClassName: "bg-blue-50 text-blue-600",
+        textClassName: "text-blue-600",
+      };
+    }
+    if (type === "recordTable") {
+      return {
+        label: "多记录数据表",
+        iconClassName: "bg-indigo-50 text-indigo-600",
+        textClassName: "text-indigo-600",
+      };
+    }
+    if (type === "audio") {
+      return {
+        label: "录音文件",
+        iconClassName: "bg-emerald-50 text-emerald-600",
+        textClassName: "text-emerald-600",
+      };
+    }
+    return {
+      label: "资料文件",
+      iconClassName: "bg-slate-100 text-slate-500",
+      textClassName: "text-slate-500",
+    };
+  };
+
+  const renderDataSourceIcon = (type: DataSourceType = "file") => {
+    if (type === "database") {
+      return <Database size={15} />;
+    }
+    if (type === "recordTable") {
+      return <Table size={15} />;
+    }
+    if (type === "audio") {
+      return <FileAudio size={15} />;
+    }
+    return <FileIcon size={15} />;
+  };
+
+  const getDataSourceItemClassName = (type: DataSourceType = "file") => {
+    if (type === "database") {
+      return "border-blue-100 bg-blue-50/40 hover:border-blue-200 hover:bg-blue-50 hover:shadow-sm";
+    }
+    if (type === "recordTable") {
+      return "border-indigo-100 bg-indigo-50/40 hover:border-indigo-200 hover:bg-indigo-50 hover:shadow-sm";
+    }
+    if (type === "audio") {
+      return "border-emerald-100 bg-emerald-50/40 hover:border-emerald-200 hover:bg-emerald-50 hover:shadow-sm";
+    }
+    return "border-slate-100 bg-slate-50 hover:border-slate-200 hover:bg-white hover:shadow-sm";
+  };
+
+  const getDataSourceAccentClassName = (type: DataSourceType = "file") => {
+    if (type === "database") {
+      return "bg-blue-500";
+    }
+    if (type === "recordTable") {
+      return "bg-indigo-500";
+    }
+    if (type === "audio") {
+      return "bg-emerald-500";
+    }
+    return "bg-slate-300";
+  };
+
+  const getGeneratedFieldDataSources = (field: typeof aiGeneratedFields[number]): ReportDataSource[] => {
+    const currentValue = manualReportFieldContents[field.id] ?? field.content;
+    const confidence = `${Math.round(field.confidence * 100)}%`;
+    const normalizedSources = field.sourceFiles.map((source): ReportDataSource => {
+      const dataSource = source as ReportDataSource;
+
+      return {
+        ...dataSource,
+        type: dataSource.type ?? inferDataSourceType(dataSource.name),
+      };
+    });
+
+    return [
+      ...normalizedSources,
+      {
+        type: "database",
+        name: "来源于数据库表：enterprise_basic_info",
+        location: "企业工商大数据",
+        detail: `Mock 记录：工商基础信息表 enterprise_basic_info 已命中企业主体记录，并用于校验【${field.name}】字段、置信度 ${confidence}、最终写入值“${currentValue}”。`,
+      },
+      {
+        type: "recordTable",
+        name: "来源于数据表：equity_structure",
+        location: "股权结构明细 · 4条记录",
+        detail: `股权结构表 equity_structure 返回多条股东持股记录。`,
+      },
+      {
+        type: "audio",
+        name: "来源于录音文件：2024年5月-大客户回访录音.mp3",
+        location: "03:35，销售",
+        detail: `Mock 片段：录音文件转写命中【${field.name}】相关表述，AI 已将该片段与报告字段进行关联审查，并用于校验“${currentValue}”这一结论。`,
+      },
+    ];
+  };
+
+  const escapeHtml = (value: string | number) =>
+    String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const isPdfSource = (source: ReportDataSource) => /\.pdf$/i.test(source.name);
+
+  const getBusinessRegistrationDetailHtml = (source: ReportDataSource) => {
+    const enterpriseName = projectName === "A公司" ? "北京字节跳动科技有限公司" : projectName;
+    const basicInfoItems: Array<{ label: string; value: string; link?: boolean }> = [
+      { label: "序号", value: "1" },
+      { label: "企业内码", value: "C0001" },
+      { label: "企业名称", value: enterpriseName, link: true },
+      { label: "企业简称", value: "-" },
+      { label: "英文全称", value: "-" },
+      { label: "法定代表人", value: "张一鸣", link: true },
+      { label: "董事长", value: "张一鸣" },
+      { label: "总经理", value: "-" },
+      { label: "董事会秘书", value: "-" },
+      { label: "组织形式标识符", value: "-" },
+      { label: "成立日期", value: "2012-03-09" },
+      { label: "币种", value: "人民币" },
+      { label: "注册资本", value: "1000万人民币" },
+      { label: "国家", value: "中国" },
+      { label: "地区", value: "-" },
+      { label: "城市", value: "-" },
+      { label: "注册地址", value: "-" },
+      { label: "办公地址", value: "-" },
+      { label: "邮编", value: "-" },
+      { label: "公司电话", value: "-" },
+      { label: "公司电子邮箱", value: "-" },
+      { label: "公司网址", value: "-" },
+      { label: "经营范围", value: "-" },
+      { label: "主营业务", value: "-" },
+      { label: "职工人数", value: "-" },
+      { label: "组织机构代码", value: "91110000000000000X" },
+      { label: "登记日", value: "-" },
+      { label: "公司状态", value: "存续" },
+      { label: "实收注册资本", value: "-" },
+      { label: "起始营业期", value: "-" },
+      { label: "截止营业期", value: "-" },
+      { label: "登记状态", value: "-" },
+      { label: "组织形式/企业性质", value: "有限责任公司" },
+      { label: "注册机构", value: "-" },
+      { label: "吊销日期", value: "-" },
+      { label: "核心企业标识", value: "-" },
+      { label: "是否删除", value: "否" },
+    ];
+    const basicInfoHtml = basicInfoItems
+      .map((item) => {
+        const valueClassName = [
+          "info-value",
+          item.link ? "info-link" : "",
+          item.value === "-" ? "is-empty" : "",
+        ].filter(Boolean).join(" ");
+
+        return `
+        <div class="info-item ${item.value === "-" ? "empty-item" : ""}">
+          <div class="info-label">${escapeHtml(item.label)}</div>
+          <div class="${valueClassName}">${escapeHtml(item.value)}</div>
+        </div>
+      `;
+      })
+      .join("");
+
+    return `
       <!doctype html>
       <html lang="zh-CN">
         <head>
           <meta charset="utf-8" />
-          <title>${file.name}</title>
+          <title>${escapeHtml(source.name)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f5f7fb; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            main { padding: 28px 30px; }
+            .page-shell { max-width: 1920px; margin: 0 auto; }
+            .topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+            .eyebrow { color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+            h1 { margin: 6px 0 0; color: #0f172a; font-size: 24px; line-height: 32px; }
+            .top-meta { margin-top: 8px; color: #64748b; font-size: 13px; }
+            .basic-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06); overflow: hidden; }
+            .card-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid #eef2f7; background: #fff; }
+            .section-title { display: flex; align-items: center; gap: 10px; color: #0f172a; font-size: 20px; font-weight: 800; }
+            .section-title::before { content: ""; width: 6px; height: 18px; border-radius: 999px; background: #2563eb; }
+            .record-meta { color: #94a3b8; font-size: 12px; }
+            .summary-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid #eef2f7; background: #fbfdff; }
+            .summary-item { min-width: 0; padding: 16px 24px; border-right: 1px solid #eef2f7; }
+            .summary-item:last-child { border-right: 0; }
+            .summary-label { color: #94a3b8; font-size: 12px; line-height: 18px; }
+            .summary-value { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #0f172a; font-size: 15px; font-weight: 800; line-height: 22px; }
+            .summary-value.link { color: #2563eb; }
+            .info-grid { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); column-gap: 58px; row-gap: 26px; padding: 28px 24px 32px; }
+            .info-item { min-width: 0; min-height: 45px; padding-bottom: 4px; border-bottom: 1px solid transparent; }
+            .info-label { color: #94a3b8; font-size: 14px; line-height: 20px; }
+            .info-value { margin-top: 5px; color: #172033; font-size: 15px; line-height: 22px; word-break: break-word; }
+            .info-link { color: #2563eb; font-weight: 700; }
+            .is-empty { color: #cbd5e1; }
+            @media (max-width: 1280px) {
+              .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+              .summary-item:nth-child(2) { border-right: 0; }
+              .summary-item:nth-child(-n+2) { border-bottom: 1px solid #eef2f7; }
+              .info-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); column-gap: 42px; row-gap: 24px; }
+            }
+            @media (max-width: 760px) {
+              main { padding: 14px; }
+              .topbar { align-items: flex-start; flex-direction: column; gap: 14px; }
+              h1 { font-size: 20px; line-height: 28px; }
+              .card-header { align-items: flex-start; flex-direction: column; padding: 18px 16px; }
+              .summary-strip { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+              .summary-item { border-right: 0; border-bottom: 1px solid #eef2f7; padding: 14px 16px; }
+              .summary-item:last-child { border-bottom: 0; }
+              .info-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 18px; padding: 22px 16px; }
+            }
+          </style>
+        </head>
+        <body>
+          <main>
+            <div class="page-shell">
+              <div class="topbar">
+                <div>
+                  <div class="eyebrow">Data Source</div>
+                  <h1>${escapeHtml(enterpriseName)}</h1>
+                  <div class="top-meta">${escapeHtml(source.location ?? "企业工商大数据")}</div>
+                </div>
+              </div>
+              <section class="basic-card">
+                <div class="card-header">
+                  <div class="section-title">基本信息</div>
+                  <div class="record-meta">更新时间：2026-05-11 14:20</div>
+                </div>
+                <div class="summary-strip">
+                  <div class="summary-item">
+                    <div class="summary-label">企业名称</div>
+                    <div class="summary-value link">${escapeHtml(enterpriseName)}</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">法定代表人</div>
+                    <div class="summary-value link">张一鸣</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">注册资本</div>
+                    <div class="summary-value">1000万人民币</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">成立日期</div>
+                    <div class="summary-value">2012-03-09</div>
+                  </div>
+                </div>
+                <div class="info-grid">${basicInfoHtml}</div>
+              </section>
+            </div>
+          </main>
+        </body>
+      </html>
+    `;
+  };
+
+  const getRecordTableDataSourceDetailHtml = (source: ReportDataSource) => {
+    const rows = [
+      ["1", "张晨", "自然人股东", "3,100万元", "3,100万元", "62.00%", "2015-06-12", "有效"],
+      ["2", "上海小狸智造投资合伙企业", "员工持股平台", "900万元", "900万元", "18.00%", "2021-04-18", "有效"],
+      ["3", "杭州星河产业基金", "机构股东", "750万元", "750万元", "15.00%", "2022-09-26", "有效"],
+      ["4", "刘洋", "自然人股东", "250万元", "250万元", "5.00%", "2024-09-10", "变更新增"],
+    ];
+    const rowHtml = rows
+      .map((row) => `
+        <tr>
+          ${row.map((cell, index) => `<td class="${index === 1 ? "strong" : index === 5 ? "ratio" : ""}">${escapeHtml(cell)}</td>`).join("")}
+        </tr>
+      `)
+      .join("");
+
+    return `
+      <!doctype html>
+      <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(source.name)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f5f7fb; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            .top-header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; height: 76px; border-bottom: 1px solid #e5e7eb; background: #fff; padding: 0 38px; box-shadow: 0 1px 8px rgba(15, 23, 42, 0.08); }
+            .back-button { border: 0; background: transparent; color: #64748b; font-size: 28px; line-height: 1; cursor: pointer; }
+            .file-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+            .source-icon { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 10px; background: #e0e7ff; color: #4f46e5; font-size: 12px; font-weight: 900; }
+            h1 { margin: 0; color: #0f172a; font-size: 20px; line-height: 28px; font-weight: 800; }
+            .file-meta { margin-top: 3px; color: #64748b; font-size: 13px; font-weight: 600; }
+            main { padding: 28px; }
+            .page-shell { max-width: 1720px; margin: 0 auto; }
+            .panel { overflow: hidden; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06); }
+            .card-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid #eef2f7; background: #fff; }
+            .section-title { display: flex; align-items: center; gap: 10px; color: #0f172a; font-size: 20px; font-weight: 800; }
+            .section-title::before { content: ""; width: 6px; height: 18px; border-radius: 999px; background: #4f46e5; }
+            .record-meta { color: #94a3b8; font-size: 12px; }
+            .summary-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid #eef2f7; background: #fbfdff; }
+            .summary-item { min-width: 0; padding: 16px 24px; border-right: 1px solid #eef2f7; }
+            .summary-item:last-child { border-right: 0; }
+            .summary-label { color: #94a3b8; font-size: 12px; line-height: 18px; }
+            .summary-value { margin-top: 4px; color: #0f172a; font-size: 15px; font-weight: 800; line-height: 22px; }
+            .table-wrap { overflow-x: auto; padding: 24px; }
+            table { width: 100%; min-width: 980px; border-collapse: collapse; color: #334155; font-size: 14px; }
+            th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 800; text-align: left; }
+            th, td { border-bottom: 1px solid #e5e7eb; padding: 14px 12px; white-space: nowrap; }
+            tr:last-child td { border-bottom: 0; }
+            .strong { color: #0f172a; font-weight: 800; }
+            .ratio { color: #4f46e5; font-weight: 900; }
+          </style>
+        </head>
+        <body>
+          <header class="top-header">
+            <button class="back-button" onclick="window.close()" aria-label="关闭">‹</button>
+            <div class="file-head">
+              <div class="source-icon">TAB</div>
+              <div>
+                <h1>股权结构明细</h1>
+                <div class="file-meta">${escapeHtml(source.location ?? "股权结构明细")} · DATA TABLE · 2026-05-11 14:20</div>
+              </div>
+            </div>
+          </header>
+          <main>
+            <div class="page-shell">
+              <section class="panel">
+                <div class="card-header">
+                  <div class="section-title">股权结构</div>
+                  <div class="record-meta">数据表：equity_structure · 共 4 条记录</div>
+                </div>
+                <div class="summary-strip">
+                  <div class="summary-item"><div class="summary-label">控股股东</div><div class="summary-value">张晨</div></div>
+                  <div class="summary-item"><div class="summary-label">控股比例</div><div class="summary-value">62.00%</div></div>
+                  <div class="summary-item"><div class="summary-label">股东数量</div><div class="summary-value">4</div></div>
+                  <div class="summary-item"><div class="summary-label">最新变更</div><div class="summary-value">2024-09-10</div></div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>序号</th><th>股东名称</th><th>股东类型</th><th>认缴出资额</th><th>实缴出资额</th><th>持股比例</th><th>出资日期</th><th>记录状态</th></tr>
+                    </thead>
+                    <tbody>${rowHtml}</tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </main>
+        </body>
+      </html>
+    `;
+  };
+
+  const getAudioDataSourceDetailHtml = (source: ReportDataSource) => {
+    const fileName = source.name.replace(/^来源于录音文件：/, "");
+    return `
+      <!doctype html>
+      <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(fileName)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f5f7fb; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            .top-header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; height: 76px; border-bottom: 1px solid #e5e7eb; background: #fff; padding: 0 38px; box-shadow: 0 1px 8px rgba(15, 23, 42, 0.08); }
+            .back-button { border: 0; background: transparent; color: #64748b; font-size: 28px; line-height: 1; cursor: pointer; }
+            .file-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+            .source-icon { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 10px; background: #d1fae5; color: #059669; font-size: 12px; font-weight: 900; }
+            h1 { margin: 0; color: #0f172a; font-size: 20px; line-height: 28px; font-weight: 800; }
+            .file-meta { margin-top: 3px; color: #64748b; font-size: 13px; font-weight: 600; }
+            .page { max-width: 1720px; margin: 0 auto; padding: 28px; }
+            .layout { display: grid; grid-template-columns: minmax(0, 1fr) 500px; gap: 28px; align-items: start; }
+            .panel, .side-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06); overflow: hidden; }
+            .panel-title, .side-title { display: flex; align-items: center; gap: 10px; height: 64px; border-bottom: 1px solid #edf0f5; padding: 0 26px; color: #0f172a; font-size: 16px; font-weight: 800; }
+            .player-body { padding: 28px 30px 18px; }
+            .player-box { display: flex; align-items: center; gap: 22px; min-height: 112px; border: 1px solid #e6ebf2; border-radius: 14px; background: #f8fafc; padding: 24px; }
+            .play-button { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border: 0; border-radius: 50%; background: #2563eb; color: #fff; box-shadow: 0 12px 24px rgba(37, 99, 235, .24); font-size: 22px; cursor: pointer; }
+            .time { width: 52px; color: #64748b; font-size: 14px; font-weight: 600; }
+            .timeline { position: relative; flex: 1; height: 12px; border-radius: 999px; background: #eef2f7; box-shadow: inset 0 0 0 1px #dbe3ee; cursor: pointer; }
+            .timeline-progress { position: absolute; left: 0; top: 1px; height: 10px; width: 22%; border-radius: 999px; background: #2563eb; transition: width .2s linear; }
+            .tabs { display: flex; gap: 32px; margin: 14px 30px 0; border-bottom: 1px solid #edf0f5; }
+            .tab { padding: 0 6px 16px; color: #64748b; font-size: 16px; font-weight: 800; }
+            .tab.active { color: #00a99d; border-bottom: 3px solid #00a99d; }
+            .transcript-wrap { margin: 18px 30px 30px; max-height: 690px; overflow-y: auto; border: 1px solid #eef2f7; border-radius: 14px; background: #fff; padding: 14px; }
+            .transcript-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; border-radius: 10px; background: #fafbfc; padding: 10px 12px; }
+            .transcript-item.active { background: #ecfdf8; }
+            .transcript-time { flex: 0 0 auto; color: #94a3b8; font-size: 13px; line-height: 24px; font-weight: 800; }
+            .transcript-item.active .transcript-time { color: #00a99d; }
+            .transcript-speaker { flex: 0 0 auto; color: #0f172a; font-size: 13px; line-height: 24px; font-weight: 800; }
+            .transcript-item p { margin: 0; color: #334155; font-size: 13px; line-height: 24px; }
+            .side { display: flex; flex-direction: column; gap: 18px; }
+            .side-card { padding-bottom: 22px; }
+            .tag-row { padding: 18px 26px 0; display: flex; flex-wrap: wrap; gap: 10px; }
+            .attr-list { padding: 18px 26px 0; display: grid; gap: 14px; }
+            .tag { width: fit-content; border-radius: 999px; background: #eef2ff; color: #2563eb; padding: 7px 14px; font-size: 13px; font-weight: 700; }
+            .attr-item { display: flex; align-items: center; justify-content: space-between; color: #64748b; font-size: 14px; }
+            .attr-value { color: #0f172a; font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <header class="top-header">
+            <button class="back-button" onclick="window.close()" aria-label="关闭">‹</button>
+            <div class="file-head"><div class="source-icon">AUD</div><div><h1>${escapeHtml(fileName)}</h1><div class="file-meta">录音文件 · AUDIO · 12.4 MB · 2024-05-20 14:15</div></div></div>
+          </header>
+          <main class="page">
+            <div class="layout">
+              <section class="panel">
+                <div class="panel-title">录音播放</div>
+                <div class="player-body"><div class="player-box"><button id="audioPlayButton" class="play-button">▷</button><div id="audioCurrentTime" class="time">04:05</div><div id="audioTimeline" class="timeline"><div id="audioProgress" class="timeline-progress"></div></div><div class="time">18:36</div></div></div>
+                <div class="tabs"><div class="tab active">内容转写</div></div>
+                <div class="transcript-wrap">
+                  <div class="transcript-item" data-start="0"><div class="transcript-time">00:00</div><span class="transcript-speaker">销售：</span><p>您好，今天主要想回访一下系统最近的使用情况。</p></div>
+                  <div class="transcript-item" data-start="80"><div class="transcript-time">01:20</div><span class="transcript-speaker">客户：</span><p>整体体验不错。现在按项目归档以后，找材料确实快了很多，特别是历史合同、会议纪要和客户反馈这些分散资料，现在基本能在一个项目目录里串起来看。</p></div>
+                  <div class="transcript-item active" data-start="215"><div class="transcript-time">03:35</div><span class="transcript-speaker">销售：</span><p>您这边使用最多的是哪一类能力？是文件搜索，还是摘要和标签？如果从团队协作角度看，哪些能力对减少重复沟通、提升项目交接效率帮助最大？</p></div>
+                  <div class="transcript-item" data-start="290"><div class="transcript-time">04:50</div><span class="transcript-speaker">客户：</span><p>搜索和摘要用得最多。尤其是领导临时问某个项目背景时，我们可以先看摘要，再点进关键原文核对，不用打开每个文件逐个翻；标签也有帮助，但还需要把几个常用标签模板固化下来。</p></div>
+                  <div class="transcript-item" data-start="430"><div class="transcript-time">07:10</div><span class="transcript-speaker">销售：</span><p>后续如果要扩展权限和标签，我们可以安排一次方案沟通，把项目权限模板、标签推荐和自动归档规则一起讲一下，再结合你们真实项目做一次演示。</p></div>
+                </div>
+              </section>
+              <aside class="side">
+                <section class="side-card"><div class="side-title">标签</div><div class="tag-row"><span class="tag">电话录音</span><span class="tag">客户回访</span></div></section>
+                <section class="side-card"><div class="side-title">基本属性</div><div class="attr-list"><div class="attr-item"><span>类型</span><span class="attr-value">AUDIO</span></div><div class="attr-item"><span>大小</span><span class="attr-value">12.4 MB</span></div><div class="attr-item"><span>时长</span><span class="attr-value">18:36</span></div><div class="attr-item"><span>创建人</span><span class="attr-value">李销售</span></div><div class="attr-item"><span>更新时间</span><span class="attr-value">2024-05-20 14:15</span></div></div></section>
+              </aside>
+            </div>
+          </main>
+          <script>
+            const totalSeconds = 1116; let currentSeconds = 245; let isPlaying = false; let timer = null;
+            const button = document.getElementById("audioPlayButton"); const currentTime = document.getElementById("audioCurrentTime"); const progress = document.getElementById("audioProgress"); const timeline = document.getElementById("audioTimeline"); const transcriptWrap = document.querySelector(".transcript-wrap"); const transcriptItems = Array.from(document.querySelectorAll(".transcript-item")); let activeTranscript = null;
+            const formatTime = (seconds) => String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
+            const syncTranscript = () => { const next = transcriptItems.reduce((cur, item) => Number(item.dataset.start || 0) <= currentSeconds ? item : cur, transcriptItems[0]); if (!next || next === activeTranscript) return; transcriptItems.forEach((item) => item.classList.toggle("active", item === next)); activeTranscript = next; transcriptWrap.scrollTo({ top: Math.max(0, next.offsetTop - transcriptWrap.offsetTop - 18), behavior: "smooth" }); };
+            const render = () => { currentTime.textContent = formatTime(currentSeconds); progress.style.width = Math.min(100, currentSeconds / totalSeconds * 100) + "%"; syncTranscript(); };
+            const pause = () => { isPlaying = false; button.textContent = "▷"; if (timer) window.clearInterval(timer); timer = null; };
+            const play = () => { if (currentSeconds >= totalSeconds) currentSeconds = 0; isPlaying = true; button.textContent = "Ⅱ"; timer = window.setInterval(() => { currentSeconds += 1; if (currentSeconds >= totalSeconds) { currentSeconds = totalSeconds; pause(); } render(); }, 1000); };
+            button.addEventListener("click", () => isPlaying ? pause() : play());
+            timeline.addEventListener("click", (event) => { const rect = timeline.getBoundingClientRect(); currentSeconds = Math.round(totalSeconds * Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))); render(); });
+            render();
+          </script>
+        </body>
+      </html>
+    `;
+  };
+
+  const getPdfDataSourceDetailHtml = (source: ReportDataSource) => {
+    const fileName = source.name;
+    return `
+      <!doctype html>
+      <html lang="zh-CN">
+        <head><meta charset="utf-8" /><title>${escapeHtml(fileName)}</title><style>
+          *{box-sizing:border-box}body{margin:0;background:#f5f7fb;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.top-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:76px;border-bottom:1px solid #e5e7eb;background:#fff;padding:0 38px;box-shadow:0 1px 8px rgba(15,23,42,.08)}.header-left{display:flex;align-items:center;gap:16px;min-width:0}.file-head{display:flex;align-items:center;gap:14px;min-width:0}.back-button{border:0;background:transparent;color:#64748b;font-size:28px;line-height:1;cursor:pointer}.source-icon{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:10px;background:#fee2e2;color:#dc2626;font-size:12px;font-weight:900}h1{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0f172a;font-size:20px;line-height:28px;font-weight:800}.file-meta{margin-top:3px;color:#64748b;font-size:13px;font-weight:600}.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.tool-button,.page-control,.zoom-control{height:36px;border:1px solid #dbe3ee;border-radius:8px;background:#fff;color:#334155;font-size:13px;font-weight:700;padding:0 11px}.viewer{display:grid;grid-template-columns:220px minmax(0,1fr) 320px;min-height:calc(100vh - 76px)}.thumbs{border-right:1px solid #dbe3ee;background:#f8fafc;padding:18px 14px}.thumb{margin-bottom:14px;border-radius:10px;border:2px solid transparent;background:#fff;padding:10px;box-shadow:0 1px 6px rgba(15,23,42,.08)}.thumb.active{border-color:#2563eb}.thumb-page{display:flex;align-items:center;justify-content:center;height:150px;border:1px solid #e5e7eb;background:#fff;color:#94a3b8;font-size:13px;font-weight:800}.canvas-wrap{overflow:auto;padding:28px 32px 48px;background:#e9eef5}.pdf-page{width:min(920px,100%);min-height:980px;margin:0 auto;background:#fff;box-shadow:0 16px 40px rgba(15,23,42,.18);padding:74px 78px}.doc-title{text-align:center;font-size:28px;font-weight:900}.doc-section{margin-top:42px}.doc-section h2{border-left:4px solid #2563eb;padding-left:12px;font-size:18px}.doc-section p{color:#334155;font-size:15px;line-height:2}.selected-text{display:inline;border-radius:4px;background:#bfdbfe;color:#1e3a8a;box-shadow:0 0 0 2px rgba(37,99,235,.35);padding:1px 3px;font-weight:800}.side{border-left:1px solid #dbe3ee;background:#fff;padding:20px}.side-card{border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin-bottom:16px;background:#fff;box-shadow:0 10px 28px rgba(15,23,42,.06)}.side-title{margin-bottom:14px;font-size:15px;font-weight:900}.meta-row{display:flex;justify-content:space-between;margin-top:12px;color:#64748b;font-size:13px}.meta-value{color:#0f172a;font-weight:700}.excerpt{border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;padding:12px;color:#1e3a8a;font-size:13px;line-height:1.8}
+        </style></head>
+        <body>
+          <header class="top-header"><div class="header-left"><button class="back-button" onclick="window.close()">‹</button><div class="file-head"><div class="source-icon">PDF</div><div><h1>${escapeHtml(fileName)}</h1><div class="file-meta">PDF文件 · 2.8 MB · 企业尽调资料 · 2026-05-11</div></div></div></div><div class="toolbar"><button class="tool-button">−</button><div class="zoom-control">100%</div><button class="tool-button">+</button><div class="page-control">第 1 / 6 页</div><button class="tool-button">下载</button><button class="tool-button">打印</button></div></header>
+          <main class="viewer"><aside class="thumbs"><div class="thumb active"><div class="thumb-page">第 1 页</div></div><div class="thumb"><div class="thumb-page">第 2 页</div></div><div class="thumb"><div class="thumb-page">第 3 页</div></div></aside><section class="canvas-wrap"><article class="pdf-page"><h1 class="doc-title">${escapeHtml(fileName.replace(/\.pdf$/i, ""))}</h1><section class="doc-section"><h2>一、资料摘要</h2><p>${escapeHtml(source.detail)}</p><p>系统已识别该 PDF 中与当前报告字段相关的原文位置，并将命中内容用于 AI 生成审查、冲突比对和报告溯源。</p></section><section class="doc-section"><h2>二、关键命中内容</h2><p>本页提取到的核心信息包括企业主体、<span class="selected-text">注册资本</span>、经营状态、授信方案、担保安排及风险核查结论。</p></section></article></section><aside class="side"><section class="side-card"><div class="side-title">基本属性</div><div class="meta-row"><span>类型</span><span class="meta-value">PDF</span></div><div class="meta-row"><span>页数</span><span class="meta-value">6 页</span></div><div class="meta-row"><span>大小</span><span class="meta-value">2.8 MB</span></div></section><section class="side-card"><div class="side-title">命中摘录</div><div class="excerpt">命中字段：<span class="selected-text">注册资本</span></div></section></aside></main>
+        </body>
+      </html>
+    `;
+  };
+
+  const openDataSourceDetail = (
+    field: typeof aiGeneratedFields[number],
+    source: ReportDataSource,
+  ) => {
+    const sourceType = source.type ?? inferDataSourceType(source.name);
+    const sourceMeta = getDataSourceTypeMeta(sourceType);
+
+    const detailHtml = sourceType === "database"
+      ? getBusinessRegistrationDetailHtml(source)
+      : sourceType === "recordTable"
+        ? getRecordTableDataSourceDetailHtml(source)
+        : sourceType === "audio"
+          ? getAudioDataSourceDetailHtml(source)
+          : isPdfSource(source)
+            ? getPdfDataSourceDetailHtml(source)
+            : `
+      <!doctype html>
+      <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(source.name)}</title>
           <style>
             body { margin: 0; background: #f8fafc; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
             main { max-width: 860px; margin: 48px auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 32px; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08); }
             h1 { margin: 0; font-size: 22px; }
             .meta { margin-top: 10px; color: #64748b; font-size: 13px; }
+            .badge { display: inline-flex; margin-bottom: 14px; border-radius: 999px; background: #eff6ff; color: #2563eb; padding: 6px 12px; font-size: 12px; font-weight: 700; }
             .block { margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; background: #f8fafc; }
             .label { color: #2563eb; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
             p { line-height: 1.8; font-size: 14px; }
@@ -881,17 +1379,26 @@ export const EditReportView = ({
         </head>
         <body>
           <main>
-            <h1>${file.name}</h1>
-            <div class="meta">字段：${field.name} · 来源：${field.source}</div>
+            <div class="badge">${escapeHtml(sourceMeta.label)}</div>
+            <h1>${escapeHtml(source.name)}</h1>
+            <div class="meta">字段：${escapeHtml(field.name)} · 抽取链路：${escapeHtml(field.source)}</div>
+            ${source.location ? `
+              <div class="block">
+                <div class="label">来源位置</div>
+                <p>${escapeHtml(source.location)}</p>
+              </div>
+            ` : ""}
             <div class="block">
               <div class="label">命中内容</div>
-              <p>${file.detail}</p>
+              <p>${escapeHtml(source.detail)}</p>
             </div>
           </main>
         </body>
       </html>
-    `);
-    target.document.close();
+    `;
+    const detailUrl = URL.createObjectURL(new Blob([detailHtml], { type: "text/html;charset=utf-8" }));
+    window.open(detailUrl, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(detailUrl), 60_000);
   };
 
   const getSectionTargetId = (sectionId: string, paragraphIndex: number) => `edit-${sectionId}-${paragraphIndex}`;
@@ -1935,7 +2442,7 @@ export const EditReportView = ({
                             </span>
                           ) : (
                             <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold text-green-700">
-                              已校验
+                              已生成
                             </span>
                           )}
                         </div>
@@ -1968,23 +2475,81 @@ export const EditReportView = ({
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Database size={15} className="text-blue-600" />
-                    <h4 className="text-sm font-bold text-slate-900">来源文件</h4>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Database size={15} className="text-blue-600" />
+                      <h4 className="text-sm font-bold text-slate-900">数据来源</h4>
+                    </div>
+                    <div ref={generationProcessPanelRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setShowGenerationProcessPanel((previous) => !previous);
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                        aria-label="查看生成过程"
+                        aria-expanded={showGenerationProcessPanel}
+                      >
+                        <GitBranch size={15} />
+                      </button>
+                      {showGenerationProcessPanel && (
+                        <div className="absolute right-0 top-9 z-30 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xl">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">生成过程</p>
+                              <p className="mt-0.5 text-[11px] text-slate-500">{selectedGeneratedField.name}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {[
+                              ["1", "识别来源", "匹配数据库、数据表、PDF、录音等候选来源。"],
+                              ["2", "抽取内容", "按字段规则抽取命中片段、结构化记录和转写内容。"],
+                              ["3", "交叉校验", "对多来源口径、置信度和冲突项进行审查。"],
+                              ["4", "写入报告", "生成字段内容，并保留可点击的数据来源溯源。"],
+                            ].map(([step, title, desc]) => (
+                              <div key={step} className="flex gap-3 rounded-xl bg-slate-50 p-2.5">
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+                                  {step}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block text-[11px] font-bold text-slate-800">{title}</span>
+                                  <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{desc}</span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    {selectedGeneratedField.sourceFiles.map((file) => (
-                      <button
-                        key={file.name}
-                        type="button"
-                        onClick={() => openSourceFileDetail(selectedGeneratedField, file)}
-                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
-                        title={file.name}
-                      >
-                        <span className="min-w-0 truncate text-xs font-bold text-slate-700">{file.name}</span>
-                        <ArrowRight size={13} className="shrink-0 text-slate-400" />
-                      </button>
-                    ))}
+                    {getGeneratedFieldDataSources(selectedGeneratedField).map((source) => {
+                      const sourceType = source.type ?? inferDataSourceType(source.name);
+                      const sourceMeta = getDataSourceTypeMeta(sourceType);
+
+                      return (
+                        <button
+                          key={`${sourceType}-${source.name}-${source.location ?? ""}`}
+                          type="button"
+                          onClick={() => openDataSourceDetail(selectedGeneratedField, source)}
+                          className={`group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all ${getDataSourceItemClassName(sourceType)}`}
+                          title={source.name}
+                        >
+                          <span className={`absolute left-0 top-0 h-full w-1 ${getDataSourceAccentClassName(sourceType)}`} />
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${sourceMeta.iconClassName}`}>
+                            {renderDataSourceIcon(sourceType)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-bold text-slate-800">{source.name}</span>
+                            <span className={`mt-0.5 block truncate text-[11px] font-medium ${sourceMeta.textClassName}`}>
+                              {sourceMeta.label}{source.location ? ` · ${source.location}` : ""}
+                            </span>
+                          </span>
+                          <ArrowRight size={13} className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -2011,7 +2576,7 @@ export const EditReportView = ({
                       <p className="mt-1 text-xs leading-5 text-slate-700">
                         {selectedGeneratedField.status === "conflict"
                           ? "存在多来源口径差异，需人工确认后再写入报告。"
-                          : "字段内容可直接写入报告，保持与来源文件一致。"}
+                          : "字段内容可直接写入报告，保持与数据来源一致。"}
                       </p>
                     </div>
                   </div>
