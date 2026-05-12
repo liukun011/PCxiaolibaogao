@@ -108,7 +108,6 @@ export const TemplatesView = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sampleInputRef = useRef<HTMLInputElement>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "parsing">("idle");
   const [uploadModal, setUploadModal] = useState<{
     isOpen: boolean;
     category: string;
@@ -119,7 +118,6 @@ export const TemplatesView = ({
   }>({ isOpen: false, category: TEMPLATE_OPTIONS[0].id, applicationScope: "personal", name: "", description: "", file: null });
   const [uploadModalError, setUploadModalError] = useState("");
   const uploadTimersRef = useRef<number[]>([]);
-  const [sampleGenerateStatus, setSampleGenerateStatus] = useState<"idle" | "uploading" | "generating">("idle");
   const [sampleGenerateModal, setSampleGenerateModal] = useState<{
     isOpen: boolean;
     category: string;
@@ -156,7 +154,6 @@ export const TemplatesView = ({
       .toLowerCase()
       .includes(searchKeyword.trim().toLowerCase()),
   );
-  const isTemplateActionBusy = uploadStatus !== "idle" || sampleGenerateStatus !== "idle";
 
   const handleUploadClick = () => {
     setUploadModal({
@@ -190,7 +187,6 @@ export const TemplatesView = ({
   };
 
   const closeUploadModal = () => {
-    if (uploadStatus !== "idle") return;
     setUploadModal({
       isOpen: false,
       category: TEMPLATE_OPTIONS[0].id,
@@ -226,44 +222,39 @@ export const TemplatesView = ({
       return;
     }
 
-    uploadTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    uploadTimersRef.current = [];
-    setUploadStatus("uploading");
+    const now = new Date();
+    const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const nextTemplate: TemplateItem = {
+      id: `tpl-${Date.now()}`,
+      name: uploadModal.name.trim(),
+      description: uploadModal.description.trim() || "用户上传的自定义模板。",
+      uploader: "当前用户",
+      uploadTime: formatted,
+      status: "parsing" as any,
+      category: uploadModal.category,
+      applicationScope: uploadModal.applicationScope,
+    };
 
-    const uploadTimer = window.setTimeout(() => {
-      setUploadStatus("parsing");
-    }, 900);
+    setTemplates((prev) => [nextTemplate, ...prev]);
+    setUploadModal({
+      isOpen: false,
+      category: TEMPLATE_OPTIONS[0].id,
+      applicationScope: "personal",
+      name: "",
+      description: "",
+      file: null,
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
     const finishTimer = window.setTimeout(() => {
-      const now = new Date();
-      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const nextTemplate: TemplateItem = {
-        id: `tpl-${Date.now()}`,
-        name: uploadModal.name.trim(),
-        description: uploadModal.description.trim() || "用户上传的自定义模板。",
-        uploader: "当前用户",
-        uploadTime: formatted,
-        status: "enabled",
-        category: uploadModal.category,
-        applicationScope: uploadModal.applicationScope,
-      };
-      setTemplates((prev) => [nextTemplate, ...prev]);
-      setUploadStatus("idle");
-      setUploadModal({
-        isOpen: false,
-        category: TEMPLATE_OPTIONS[0].id,
-        applicationScope: "personal",
-        name: "",
-        description: "",
-        file: null,
-      });
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      onOpenTemplate(nextTemplate, true);
-    }, 2600);
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === nextTemplate.id ? { ...t, status: "enabled" } : t)),
+      );
+    }, 5000);
 
-    uploadTimersRef.current.push(uploadTimer, finishTimer);
+    uploadTimersRef.current.push(finishTimer);
   };
 
   const handleSampleGenerateClick = () => {
@@ -298,7 +289,6 @@ export const TemplatesView = ({
   };
 
   const closeSampleGenerateModal = () => {
-    if (sampleGenerateStatus !== "idle") return;
     setSampleGenerateModal({
       isOpen: false,
       category: TEMPLATE_OPTIONS[0].id,
@@ -334,44 +324,39 @@ export const TemplatesView = ({
       return;
     }
 
-    sampleGenerateTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    sampleGenerateTimersRef.current = [];
-    setSampleGenerateStatus("uploading");
+    const now = new Date();
+    const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const nextTemplate: TemplateItem = {
+      id: `tpl-${Date.now()}`,
+      name: sampleGenerateModal.name.trim(),
+      description: sampleGenerateModal.description.trim() || `基于 ${sampleGenerateModal.files.length} 个样例生成的模板。`,
+      uploader: "当前用户",
+      uploadTime: formatted,
+      status: "parsing" as any,
+      category: sampleGenerateModal.category,
+      applicationScope: sampleGenerateModal.applicationScope,
+    };
 
-    const uploadTimer = window.setTimeout(() => {
-      setSampleGenerateStatus("generating");
-    }, 900);
+    setTemplates((prev) => [nextTemplate, ...prev]);
+    setSampleGenerateModal({
+      isOpen: false,
+      category: TEMPLATE_OPTIONS[0].id,
+      applicationScope: "personal",
+      name: "",
+      description: "",
+      files: [],
+    });
+    if (sampleInputRef.current) {
+      sampleInputRef.current.value = "";
+    }
 
     const finishTimer = window.setTimeout(() => {
-      const now = new Date();
-      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const nextTemplate: TemplateItem = {
-        id: `tpl-${Date.now()}`,
-        name: sampleGenerateModal.name.trim(),
-        description: sampleGenerateModal.description.trim() || `基于 ${sampleGenerateModal.files.length} 个样例生成的模板。`,
-        uploader: "当前用户",
-        uploadTime: formatted,
-        status: "enabled",
-        category: sampleGenerateModal.category,
-        applicationScope: sampleGenerateModal.applicationScope,
-      };
-      setTemplates((prev) => [nextTemplate, ...prev]);
-      setSampleGenerateStatus("idle");
-      setSampleGenerateModal({
-        isOpen: false,
-        category: TEMPLATE_OPTIONS[0].id,
-        applicationScope: "personal",
-        name: "",
-        description: "",
-        files: [],
-      });
-      if (sampleInputRef.current) {
-        sampleInputRef.current.value = "";
-      }
-      onOpenTemplate(nextTemplate, true);
-    }, 3000);
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === nextTemplate.id ? { ...t, status: "enabled" } : t)),
+      );
+    }, 8000);
 
-    sampleGenerateTimersRef.current.push(uploadTimer, finishTimer);
+    sampleGenerateTimersRef.current.push(finishTimer);
   };
 
   const openConfirmModal = (action: "enable" | "disable" | "delete", template: TemplateItem) => {
@@ -443,132 +428,141 @@ export const TemplatesView = ({
           </div>
           <button
             onClick={handleSampleGenerateClick}
-            disabled={isTemplateActionBusy}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-50"
           >
-            {sampleGenerateStatus === "idle" ? <Sparkles size={16} /> : <RefreshCw size={16} className="animate-spin" />}
-            <span>
-              {sampleGenerateStatus === "uploading"
-                ? "上传样例中..."
-                : sampleGenerateStatus === "generating"
-                  ? "生成模板中..."
-                  : "通过样例生成"}
-            </span>
+            <Sparkles size={16} />
+            <span>通过样例生成</span>
           </button>
           <button
             onClick={handleUploadClick}
-            disabled={isTemplateActionBusy}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
-            {uploadStatus === "idle" ? <Plus size={16} /> : <RefreshCw size={16} className="animate-spin" />}
-            <span>{uploadStatus === "uploading" ? "上传中..." : uploadStatus === "parsing" ? "解析中..." : "上传模板"}</span>
+            <Plus size={16} />
+            <span>上传模板</span>
           </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filteredTemplates.map((template) => (
-            <div
-              key={template.id}
-              onClick={() => onOpenTemplate(template)}
-              className={`group flex h-56 flex-col rounded-2xl border p-6 transition-all ${
-                template.status === "enabled"
-                  ? "border-gray-200 bg-white shadow-sm hover:border-blue-200 hover:shadow-lg"
-                  : "border-dashed border-slate-300 bg-slate-50/80 shadow-sm hover:border-slate-400 hover:bg-white hover:shadow-md"
-              }`}
-            >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1 ${
-                    template.status === "enabled"
-                      ? "bg-blue-50 text-blue-600 ring-blue-100"
-                      : "bg-white text-slate-400 ring-slate-200"
-                  }`}>
-                    <FileText size={22} />
+          {filteredTemplates.map((template) => {
+            const isParsing = (template.status as string) === "parsing";
+            return (
+              <div
+                key={template.id}
+                onClick={() => {
+                  if (!isParsing) onOpenTemplate(template);
+                }}
+                className={`group flex h-56 flex-col rounded-2xl border p-6 transition-all ${
+                  isParsing
+                    ? "border-gray-200 bg-gray-50/50 cursor-not-allowed"
+                    : template.status === "enabled"
+                      ? "border-gray-200 bg-white shadow-sm hover:border-blue-200 hover:shadow-lg cursor-pointer"
+                      : "border-dashed border-slate-300 bg-slate-50/80 shadow-sm hover:border-slate-400 hover:bg-white hover:shadow-md cursor-pointer"
+                }`}
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1 ${
+                      isParsing
+                        ? "bg-gray-100 text-gray-400 ring-gray-200"
+                        : template.status === "enabled"
+                          ? "bg-blue-50 text-blue-600 ring-blue-100"
+                          : "bg-white text-slate-400 ring-slate-200"
+                    }`}>
+                      {isParsing ? <RefreshCw size={22} className="animate-spin" /> : <FileText size={22} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        className={`truncate text-base font-bold ${template.status === "enabled" ? "text-gray-800" : "text-slate-600"} ${isParsing ? "opacity-60" : ""}`}
+                        title={template.name}
+                      >
+                        {template.name}
+                      </h3>
+                      <div className={`mt-1 flex min-w-0 flex-wrap items-center gap-1.5 ${isParsing ? "opacity-60" : ""}`}>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                          {getTemplateCategoryTitle(template.category)}
+                        </span>
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
+                          {getTemplateScopeTitle(template.applicationScope)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h3
-                      className={`truncate text-base font-bold ${template.status === "enabled" ? "text-gray-800" : "text-slate-600"}`}
-                      title={template.name}
-                    >
-                      {template.name}
-                    </h3>
-                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-                        {getTemplateCategoryTitle(template.category)}
+                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
+                    isParsing
+                      ? "border-blue-100 bg-blue-50 text-blue-600"
+                      : template.status === "enabled"
+                        ? "border-green-100 bg-green-50 text-green-600"
+                        : "border-slate-200 bg-white text-slate-500"
+                  }`}>
+                    {isParsing ? "解析中" : template.status === "enabled" ? "已启用" : "已禁用"}
+                  </span>
+                </div>
+
+                <div className="min-h-0 flex-1">
+                  <p className={`line-clamp-3 text-sm leading-6 ${template.status === "enabled" ? "text-gray-500" : "text-slate-400"} ${isParsing ? "opacity-60" : ""}`} title={template.description}>
+                    {template.description}
+                  </p>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                  <div className={`min-w-0 flex-1 text-xs ${template.status === "enabled" ? "text-gray-400" : "text-slate-400"} ${isParsing ? "opacity-60" : ""}`}>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <User size={12} className="shrink-0" />
+                        <span className="truncate">{template.uploader}</span>
                       </span>
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
-                        {getTemplateScopeTitle(template.applicationScope)}
+                      <span className="h-3 w-px shrink-0 bg-gray-200" />
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <Clock size={12} className="shrink-0" />
+                        <span className="truncate">{template.uploadTime}</span>
                       </span>
                     </div>
                   </div>
-                </div>
-                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
-                  template.status === "enabled"
-                    ? "border-green-100 bg-green-50 text-green-600"
-                    : "border-slate-200 bg-white text-slate-500"
-                }`}>
-                  {template.status === "enabled" ? "已启用" : "已禁用"}
-                </span>
-              </div>
 
-              <div className="min-h-0 flex-1">
-                <p className={`line-clamp-3 text-sm leading-6 ${template.status === "enabled" ? "text-gray-500" : "text-slate-400"}`} title={template.description}>
-                  {template.description}
-                </p>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-                <div className={`min-w-0 flex-1 text-xs ${template.status === "enabled" ? "text-gray-400" : "text-slate-400"}`}>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <User size={12} className="shrink-0" />
-                      <span className="truncate">{template.uploader}</span>
-                    </span>
-                    <span className="h-3 w-px shrink-0 bg-gray-200" />
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <Clock size={12} className="shrink-0" />
-                      <span className="truncate">{template.uploadTime}</span>
-                    </span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (isParsing) return;
+                        openConfirmModal(template.status === "enabled" ? "disable" : "enable", template);
+                      }}
+                      disabled={isParsing}
+                      className={`rounded-md p-1.5 transition-colors ${isParsing ? "text-gray-300 cursor-not-allowed" : template.status === "enabled" ? "text-amber-500 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
+                      title={template.status === "enabled" ? "禁用模板" : "启用模板"}
+                    >
+                      {template.status === "enabled" ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                    </button>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (isParsing) return;
+                        openEditModal(template);
+                      }}
+                      disabled={isParsing}
+                      className={`rounded-md p-1.5 transition-colors ${isParsing ? "text-gray-300 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50"}`}
+                      title="编辑模板"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (isParsing) return;
+                        openConfirmModal("delete", template);
+                      }}
+                      disabled={isParsing}
+                      className={`rounded-md p-1.5 transition-colors ${isParsing ? "text-gray-300 cursor-not-allowed" : "text-red-500 hover:bg-red-50"}`}
+                      title="删除模板"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openConfirmModal(template.status === "enabled" ? "disable" : "enable", template);
-                    }}
-                    className={`rounded-md p-1.5 transition-colors ${template.status === "enabled" ? "text-amber-500 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
-                    title={template.status === "enabled" ? "禁用模板" : "启用模板"}
-                  >
-                    {template.status === "enabled" ? <Ban size={16} /> : <CheckCircle2 size={16} />}
-                  </button>
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEditModal(template);
-                    }}
-                    className="rounded-md p-1.5 text-blue-500 transition-colors hover:bg-blue-50"
-                    title="编辑模板"
-                  >
-                    <Edit3 size={16} />
-                  </button>
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openConfirmModal("delete", template);
-                    }}
-                    className="rounded-md p-1.5 text-red-500 transition-colors hover:bg-red-50"
-                    title="删除模板"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {filteredTemplates.length === 0 && (
@@ -605,8 +599,7 @@ export const TemplatesView = ({
                 </div>
                 <button
                   onClick={closeUploadModal}
-                  disabled={uploadStatus !== "idle"}
-                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                 >
                   <X size={18} />
                 </button>
@@ -622,8 +615,7 @@ export const TemplatesView = ({
                     onChange={(event) =>
                       setUploadModal((prev) => ({ ...prev, category: event.target.value }))
                     }
-                    disabled={uploadStatus !== "idle"}
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white"
                   >
                     {TEMPLATE_OPTIONS.map((option) => (
                       <option key={option.id} value={option.id}>
@@ -647,8 +639,7 @@ export const TemplatesView = ({
                           onClick={() =>
                             setUploadModal((prev) => ({ ...prev, applicationScope: option.id }))
                           }
-                          disabled={uploadStatus !== "idle"}
-                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition-colors ${
                             isActive
                               ? "border-blue-500 bg-blue-50 text-blue-700"
                               : "border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-white"
@@ -670,9 +661,8 @@ export const TemplatesView = ({
                     onChange={(event) =>
                       setUploadModal((prev) => ({ ...prev, name: event.target.value }))
                     }
-                    disabled={uploadStatus !== "idle"}
                     placeholder="请输入模板名称，最多50个字符"
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white"
                   />
                 </div>
 
@@ -683,9 +673,8 @@ export const TemplatesView = ({
                     onChange={(event) =>
                       setUploadModal((prev) => ({ ...prev, description: event.target.value }))
                     }
-                    disabled={uploadStatus !== "idle"}
                     placeholder="请输入模板描述，最多300个字符"
-                    className="min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white"
                   />
                 </div>
 
@@ -696,8 +685,7 @@ export const TemplatesView = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadStatus !== "idle"}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-4 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-4 text-left transition-colors hover:bg-blue-50"
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-gray-800">
@@ -724,24 +712,16 @@ export const TemplatesView = ({
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={closeUploadModal}
-                  disabled={uploadStatus !== "idle"}
-                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
                 >
                   取消
                 </button>
                 <button
                   onClick={submitTemplateUpload}
-                  disabled={uploadStatus !== "idle"}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
                 >
-                  {uploadStatus === "idle" ? <Plus size={16} /> : <RefreshCw size={16} className="animate-spin" />}
-                  <span>
-                    {uploadStatus === "uploading"
-                      ? "上传中..."
-                      : uploadStatus === "parsing"
-                        ? "生成中..."
-                        : "上传生成模板"}
-                  </span>
+                  <Plus size={16} />
+                  <span>上传生成模板</span>
                 </button>
               </div>
             </motion.div>
@@ -770,8 +750,7 @@ export const TemplatesView = ({
                 </div>
                 <button
                   onClick={closeSampleGenerateModal}
-                  disabled={sampleGenerateStatus !== "idle"}
-                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                 >
                   <X size={18} />
                 </button>
@@ -787,8 +766,7 @@ export const TemplatesView = ({
                     onChange={(event) =>
                       setSampleGenerateModal((prev) => ({ ...prev, category: event.target.value }))
                     }
-                    disabled={sampleGenerateStatus !== "idle"}
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white"
                   >
                     {TEMPLATE_OPTIONS.map((option) => (
                       <option key={option.id} value={option.id}>
@@ -812,8 +790,7 @@ export const TemplatesView = ({
                           onClick={() =>
                             setSampleGenerateModal((prev) => ({ ...prev, applicationScope: option.id }))
                           }
-                          disabled={sampleGenerateStatus !== "idle"}
-                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition-colors ${
                             isActive
                               ? "border-blue-500 bg-blue-50 text-blue-700"
                               : "border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-white"
@@ -835,9 +812,8 @@ export const TemplatesView = ({
                     onChange={(event) =>
                       setSampleGenerateModal((prev) => ({ ...prev, name: event.target.value }))
                     }
-                    disabled={sampleGenerateStatus !== "idle"}
                     placeholder="请输入模板名称，最多50个字符"
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white"
                   />
                 </div>
 
@@ -848,9 +824,8 @@ export const TemplatesView = ({
                     onChange={(event) =>
                       setSampleGenerateModal((prev) => ({ ...prev, description: event.target.value }))
                     }
-                    disabled={sampleGenerateStatus !== "idle"}
                     placeholder="请输入模板描述，最多300个字符"
-                    className="min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="min-h-24 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-800 outline-none transition focus:border-blue-300 focus:bg-white"
                   />
                 </div>
 
@@ -862,8 +837,7 @@ export const TemplatesView = ({
                   <button
                     type="button"
                     onClick={() => sampleInputRef.current?.click()}
-                    disabled={sampleGenerateStatus !== "idle"}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-4 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-4 text-left transition-colors hover:bg-blue-50"
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-gray-800">
@@ -903,71 +877,22 @@ export const TemplatesView = ({
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={closeSampleGenerateModal}
-                  disabled={sampleGenerateStatus !== "idle"}
-                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
                 >
                   取消
                 </button>
                 <button
                   onClick={submitSampleGenerate}
-                  disabled={sampleGenerateStatus !== "idle"}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
                 >
-                  {sampleGenerateStatus === "idle" ? <Sparkles size={16} /> : <RefreshCw size={16} className="animate-spin" />}
-                  <span>
-                    {sampleGenerateStatus === "uploading"
-                      ? "上传中..."
-                      : sampleGenerateStatus === "generating"
-                        ? "生成中..."
-                        : "生成模板"}
-                  </span>
+                  <Sparkles size={16} />
+                  <span>生成模板</span>
                 </button>
               </div>
             </motion.div>
           </div>
         )}
 
-        {sampleGenerateStatus !== "idle" && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center rounded-3xl bg-white/60 backdrop-blur-sm"
-          >
-            <div className="flex min-w-[260px] flex-col items-center gap-5 rounded-3xl bg-white px-8 py-8 shadow-xl">
-              <div className="relative flex h-16 w-16 items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-                <div className="absolute inset-0 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-                {sampleGenerateStatus === "generating" && <Sparkles size={24} className="text-blue-600" />}
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold text-gray-800">{sampleGenerateStatus === "uploading" ? "正在上传样例..." : "正在生成模板..."}</p>
-                <p className="mt-1 text-sm text-gray-500">{sampleGenerateStatus === "uploading" ? "请稍候，样例文件传输中" : "AI 正在归纳样例结构与字段规则"}</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {uploadStatus !== "idle" && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center rounded-3xl bg-white/60 backdrop-blur-sm"
-          >
-            <div className="flex min-w-[260px] flex-col items-center gap-5 rounded-3xl bg-white px-8 py-8 shadow-xl">
-              <div className="relative flex h-16 w-16 items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-                <div className="absolute inset-0 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-                {uploadStatus === "parsing" && <FileText size={24} className="text-blue-600" />}
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold text-gray-800">{uploadStatus === "uploading" ? "正在上传..." : "正在解析..."}</p>
-                <p className="mt-1 text-sm text-gray-500">{uploadStatus === "uploading" ? "请稍候，文件传输中" : "AI 正在提取模板结构与内容"}</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -1090,5 +1015,3 @@ export const TemplatesView = ({
     </div>
   );
 };
-
-
