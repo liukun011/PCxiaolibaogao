@@ -98,6 +98,14 @@ type ReportGenerationStatus = "idle" | "generating" | "generated";
 
 type ReportGenerationTone = "info" | "success" | "warning";
 
+type DueDiligenceSummaryStatus = "idle" | "generating" | "generated";
+
+type DueDiligenceSummaryMetric = {
+  label: string;
+  value: string;
+  tone: "blue" | "emerald" | "amber" | "red";
+};
+
 type ReportGenerationEvent = {
   id: string;
   stageId: string;
@@ -139,7 +147,7 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
       {
         title: "资料清单已锁定",
         summary: "已接收财报、合同、流水、工商、访谈等 126 份资料，开始做格式与完整性检查。",
-        source: "文件管理 / 上传清单",
+        source: "尽调资料 / 上传清单",
         progress: 6,
         documentCount: 8,
         evidenceCount: 0,
@@ -489,6 +497,14 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [showTemplateSwitchModal, setShowTemplateSwitchModal] = useState(false);
   const [showReportActionMenu, setShowReportActionMenu] = useState(false);
   const [showCompanyDataActionMenu, setShowCompanyDataActionMenu] = useState(false);
+  const [showDueDiligenceSummaryPanel, setShowDueDiligenceSummaryPanel] = useState(false);
+  const [dueDiligenceSummaryStatus, setDueDiligenceSummaryStatus] = useState<DueDiligenceSummaryStatus>(
+    intelligenceResult?.dueDiligenceSummary ? "generated" : "idle",
+  );
+  const [dueDiligenceSummary, setDueDiligenceSummary] = useState<string>(intelligenceResult?.dueDiligenceSummary || "");
+  const [dueDiligenceSummaryMetrics, setDueDiligenceSummaryMetrics] = useState<DueDiligenceSummaryMetric[]>(
+    intelligenceResult?.dueDiligenceSummaryMetrics || [],
+  );
   const [reportGenerationStatus, setReportGenerationStatus] = useState<ReportGenerationStatus>(
     intelligenceResult?.reportGenerated ? "generated" : "idle",
   );
@@ -505,6 +521,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [headerProjectNameInput, setHeaderProjectNameInput] = useState("");
   const [headerCompanyNameInput, setHeaderCompanyNameInput] = useState("");
   const aiInsightTimersRef = useRef<number[]>([]);
+  const dueDiligenceSummaryTimerRef = useRef<number | null>(null);
   const reportGenerationTimerRef = useRef<number | null>(null);
   const reportActionMenuRef = useRef<HTMLDivElement>(null);
   const companyDataActionMenuRef = useRef<HTMLDivElement>(null);
@@ -512,6 +529,9 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   useEffect(() => {
     return () => {
       aiInsightTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      if (dueDiligenceSummaryTimerRef.current) {
+        window.clearInterval(dueDiligenceSummaryTimerRef.current);
+      }
       if (reportGenerationTimerRef.current) {
         window.clearInterval(reportGenerationTimerRef.current);
       }
@@ -586,6 +606,17 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
       setSelectedReportTemplateId(intelligenceResult.reportTemplateId);
     }
   }, [intelligenceResult?.reportTemplateId]);
+
+  useEffect(() => {
+    if (intelligenceResult?.dueDiligenceSummary) {
+      setDueDiligenceSummary(intelligenceResult.dueDiligenceSummary);
+      setDueDiligenceSummaryStatus("generated");
+    }
+
+    if (intelligenceResult?.dueDiligenceSummaryMetrics) {
+      setDueDiligenceSummaryMetrics(intelligenceResult.dueDiligenceSummaryMetrics);
+    }
+  }, [intelligenceResult?.dueDiligenceSummary, intelligenceResult?.dueDiligenceSummaryMetrics]);
 
   useEffect(() => {
     if (initialSection !== "questions") return;
@@ -768,6 +799,96 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
       reportTemplateName: template.name,
     }));
     setShowTemplateSwitchModal(false);
+  };
+
+  const buildDueDiligenceSummary = () => {
+    const company = dashboardCompanyName !== "未填写企业名称" ? dashboardCompanyName : projectName;
+    const industry = companyOverviewItems.find((item) => item.label === "所属行业")?.value || "暂无";
+    const capital = companyOverviewItems.find((item) => item.label === "注册资本")?.value || "暂无";
+    const location = companyOverviewItems.find((item) => item.label === "注册地址")?.value || "暂无";
+    const legalPerson = companyOverviewItems.find((item) => item.label === "法定代表人")?.value || "暂无";
+    const riskCount = riskHighlights.length + financialAnomalies.length;
+    const questionCount = questions.length + pendingQuestions.length;
+    const riskText = riskHighlights.length
+      ? riskHighlights.map((item) => `${item.label}${item.value}`).join("、")
+      : "暂未识别到明确外部风险记录";
+    const anomalyText = financialAnomalies.length
+      ? financialAnomalies.map((item: any) => item.detail || item.title || item.type).filter(Boolean).join("；")
+      : "财务异常信息暂不充分，建议结合财报、流水和合同台账继续核验";
+    const generatedAt = new Date().toLocaleString("zh-CN");
+
+    const metrics: DueDiligenceSummaryMetric[] = [
+      { label: "主体完整度", value: rawCompanyData.name || intelligenceResult?.companyName ? "较完整" : "待补充", tone: rawCompanyData.name || intelligenceResult?.companyName ? "emerald" : "amber" },
+      { label: "风险信号", value: `${riskCount} 项`, tone: riskCount >= 3 ? "red" : riskCount > 0 ? "amber" : "emerald" },
+      { label: "访谈追问", value: `${questionCount} 个`, tone: questionCount > 0 ? "blue" : "amber" },
+      { label: "生成时间", value: generatedAt, tone: "blue" },
+    ];
+
+    const summary = [
+      `# ${company} 尽调总结`,
+      "",
+      `## 企业画像`,
+      `${company} 当前尽调资料显示，企业法定代表人为 ${legalPerson}，注册资本为 ${capital}，所属行业为 ${industry}，注册地址为 ${location}。现有数据已覆盖主体工商、基础经营信息、风险线索与访谈问题，能够支持形成初步尽调判断。`,
+      "",
+      `## 关键发现`,
+      `1. 主体信息方面，企业名称、法定代表人、注册资本、成立日期和注册地址等字段已完成汇总，后续应重点核验工商口径与授信申请资料是否一致。`,
+      `2. 风险信息方面，系统识别到 ${riskText}。该类信号建议进入人工复核清单，并与企业说明、司法材料、税务凭证或抵质押登记记录交叉验证。`,
+      `3. 财务与经营方面，${anomalyText}。若后续生成报告，应优先补充收入确认、应收回款、现金流和大额合同履约证据。`,
+      "",
+      `## 风险判断`,
+      `现阶段结论倾向于“可继续推进，但需带条件核验”。若外部风险记录、财务异常或材料缺口无法解释清楚，应在报告中明确列示风险缓释措施、放款前条件和贷后跟踪要求。`,
+      "",
+      `## 建议动作`,
+      `1. 复核企业基础信息、股权结构、实际控制人和历史变更，确认与客户经理访谈口径一致。`,
+      `2. 围绕应收账款、回款周期、订单质量、主要客户集中度和现金流匹配关系补充问答。`,
+      `3. 对诉讼、处罚、质押、欠税等风险线索逐条补证，并标注是否已结案、已解除或仍在持续。`,
+      `4. 将本总结中的风险点同步到后续报告生成和尽调结论章节，避免结论与证据链脱节。`,
+    ].join("\n");
+
+    return { summary, metrics };
+  };
+
+  const startDueDiligenceSummaryGeneration = () => {
+    if (dueDiligenceSummaryTimerRef.current) {
+      window.clearInterval(dueDiligenceSummaryTimerRef.current);
+      dueDiligenceSummaryTimerRef.current = null;
+    }
+
+    const { summary, metrics } = buildDueDiligenceSummary();
+    const chunks = summary.match(/[\s\S]{1,18}/g) || [summary];
+    let chunkIndex = 0;
+
+    setShowDueDiligenceSummaryPanel(true);
+    setDueDiligenceSummaryStatus("generating");
+    setDueDiligenceSummary("");
+    setDueDiligenceSummaryMetrics(metrics);
+
+    dueDiligenceSummaryTimerRef.current = window.setInterval(() => {
+      chunkIndex += 1;
+      setDueDiligenceSummary(chunks.slice(0, chunkIndex).join(""));
+
+      if (chunkIndex >= chunks.length) {
+        if (dueDiligenceSummaryTimerRef.current) {
+          window.clearInterval(dueDiligenceSummaryTimerRef.current);
+          dueDiligenceSummaryTimerRef.current = null;
+        }
+
+        setDueDiligenceSummaryStatus("generated");
+        setIntelligenceResult((prev: any) => ({
+          ...(prev || {}),
+          dueDiligenceSummary: summary,
+          dueDiligenceSummaryMetrics: metrics,
+          dueDiligenceSummaryGeneratedAt: new Date().toLocaleString("zh-CN"),
+        }));
+      }
+    }, 55);
+  };
+
+  const openDueDiligenceSummary = () => {
+    setShowDueDiligenceSummaryPanel(true);
+    if (dueDiligenceSummaryStatus === "idle" && !dueDiligenceSummary) {
+      startDueDiligenceSummaryGeneration();
+    }
   };
 
   const startReportGeneration = () => {
@@ -1177,6 +1298,25 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               )}
             </div>
             <button
+              onClick={openDueDiligenceSummary}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                dueDiligenceSummaryStatus === "generating"
+                  ? "border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  : dueDiligenceSummaryStatus === "generated"
+                    ? "border border-emerald-200 bg-white text-emerald-700 shadow-sm hover:bg-emerald-50"
+                    : "border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
+              }`}
+            >
+              {dueDiligenceSummaryStatus === "generating" ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : dueDiligenceSummaryStatus === "generated" ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              <span>{dueDiligenceSummaryStatus === "generated" ? "查看尽调总结" : "尽调总结"}</span>
+            </button>
+            <button
               onClick={() => setShowTemplateSwitchModal(true)}
               className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
             >
@@ -1380,7 +1520,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         <div className="space-y-8">
           <DocumentClassificationSection
             sectionNumber={1}
-            title="文件管理"
+            title="尽调资料"
             onFilesStateChange={setHasDocumentMaterials}
             initialFiles={interviewMaterials}
           />
@@ -2087,6 +2227,15 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         onDownload={downloadGeneratedReport}
       />
 
+      <DueDiligenceSummaryPanel
+        open={showDueDiligenceSummaryPanel}
+        status={dueDiligenceSummaryStatus}
+        summary={dueDiligenceSummary}
+        companyName={dashboardCompanyName}
+        onClose={() => setShowDueDiligenceSummaryPanel(false)}
+        onRegenerate={startDueDiligenceSummaryGeneration}
+      />
+
       <AnimatePresence>
         {showHeaderEditModal && (
           <motion.div
@@ -2321,6 +2470,115 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         )}
       </AnimatePresence>
     </>
+  );
+};
+
+const DueDiligenceSummaryPanel = ({
+  open,
+  status,
+  summary,
+  companyName,
+  onClose,
+  onRegenerate,
+}: {
+  open: boolean;
+  status: DueDiligenceSummaryStatus;
+  summary: string;
+  companyName: string;
+  onClose: () => void;
+  onRegenerate: () => void;
+}) => {
+  const renderSummary = () => {
+    if (!summary) {
+      return (
+        <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center">
+          <Sparkles size={28} className="text-slate-300" />
+          <p className="mt-3 text-sm font-medium text-slate-500">点击重新生成后，将在这里输出尽调总结。</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {summary.split("\n").map((line, index) => {
+          if (line.startsWith("# ")) {
+            return <h3 key={index} className="text-xl font-black text-slate-900">{line.replace("# ", "")}</h3>;
+          }
+          if (line.startsWith("## ")) {
+            return <h4 key={index} className="pt-3 text-sm font-black text-blue-700">{line.replace("## ", "")}</h4>;
+          }
+          if (!line.trim()) {
+            return <div key={index} className="h-1" />;
+          }
+          return <p key={index} className="text-sm leading-7 text-slate-700">{line}</p>;
+        })}
+        {status === "generating" && (
+          <span className="inline-flex h-5 items-center gap-1.5 text-xs font-bold text-blue-600">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-blue-600" />
+            流式生成中
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[135] bg-slate-950/45 p-4 backdrop-blur-sm md:p-6"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="mx-auto flex h-[calc(100vh-2rem)] max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl md:h-[calc(100vh-3rem)]"
+          >
+            <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-100">
+                  {status === "generating" ? <RefreshCw size={20} className="animate-spin" /> : <ClipboardCheck size={20} />}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-bold text-slate-900">尽调总结</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {companyName} 的企业数据总结，支持生成后查看与重新生成。
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={onRegenerate}
+                  disabled={status === "generating"}
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RefreshCw size={14} className={status === "generating" ? "animate-spin" : ""} />
+                  <span>{status === "generated" ? "重新生成" : "生成中"}</span>
+                </button>
+                <button
+                  onClick={onClose}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
+                  aria-label="关闭尽调总结"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                {renderSummary()}
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
