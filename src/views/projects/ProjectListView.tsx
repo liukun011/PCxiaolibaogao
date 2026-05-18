@@ -124,15 +124,25 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
   };
 
   const projects = [
-    { id: 1, title: "a", desc: "公司名称为“小狸报告”，主营AI智能报告生成。面向数字化转...", time: "2026-03-19 16:09:08", icon: FileText },
-    { id: 2, title: "a", desc: "公司名称为“a”，主营业务未提供，财务状况未提供相关信息...", time: "2026-03-13 14:15:34", icon: User },
-    { id: 3, title: "1", desc: "公司名称为“未提供”，主营业务未提供相关信息，财务状况未...", time: "2026-03-07 14:01:01", icon: MessageSquare },
-    { id: 4, title: "b", desc: "访谈小总结未生成，请刷新生成。", time: "2026-03-03 16:54:20", icon: MessageSquare },
-    { id: 5, title: "11", desc: "公司名称为“未提供”，主营业务未提供相关信息，财务状况未...", time: "2026-03-02 15:07:28", icon: User },
-    { id: 6, title: "aa", desc: "访谈小总结未生成，请刷新生成。", time: "2026-03-02 15:07:23", icon: Mic },
-    { id: 7, title: "aa", desc: "访谈小总结未生成，请刷新生成。", time: "2026-03-02 15:06:53", icon: FileText },
-    { id: 8, title: "a", desc: "访谈小总结未生成，请刷新生成。", time: "2026-02-25 15:23:39", icon: FileIcon },
+    { id: 1, title: "小狸报告流贷尽调", desc: "公司名称为“小狸报告”，主营AI智能报告生成。面向数字化转...", createdBy: "李销售", createdAt: "2026-03-19 16:09:08", icon: FileText },
+    { id: 2, title: "A 公司经营尽调", desc: "公司名称为“a”，主营业务未提供，财务状况未提供相关信息...", createdBy: "王客户经理", createdAt: "2026-03-13 14:15:34", icon: Building },
+    { id: 3, title: "个人经营贷尽调", desc: "公司名称为“未提供”，主营业务未提供相关信息，财务状况未...", createdBy: "张尽调", createdAt: "2026-03-07 14:01:01", icon: User },
+    { id: 4, title: "B 企业访谈尽调", desc: "访谈小总结未生成，请刷新生成。", createdBy: "陈分析师", createdAt: "2026-03-03 16:54:20", icon: MessageSquare },
+    { id: 5, title: "11 号项目", desc: "公司名称为“未提供”，主营业务未提供相关信息，财务状况未...", createdBy: "李销售", createdAt: "2026-03-02 15:07:28", icon: ClipboardCheck },
+    { id: 6, title: "AA 访谈项目", desc: "访谈小总结未生成，请刷新生成。", createdBy: "周经理", createdAt: "2026-03-02 15:07:23", icon: Mic },
+    { id: 7, title: "AA 企业资料尽调", desc: "访谈小总结未生成，请刷新生成。", createdBy: "赵审核", createdAt: "2026-03-02 15:06:53", icon: FileText },
+    { id: 8, title: "A 企业补充尽调", desc: "访谈小总结未生成，请刷新生成。", createdBy: "钱顾问", createdAt: "2026-02-25 15:23:39", icon: FileIcon },
   ];
+
+  const handleEditProject = (event: React.MouseEvent, projectTitle: string) => {
+    event.stopPropagation();
+    window.alert(`编辑项目：${projectTitle}`);
+  };
+
+  const handleDeleteProject = (event: React.MouseEvent, projectTitle: string) => {
+    event.stopPropagation();
+    window.confirm(`确认删除尽调项目“${projectTitle}”吗？`);
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-white">
@@ -279,24 +289,43 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {projects.map((project) => (
             <motion.div
               key={project.id}
-              whileHover={{ y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}
+              whileHover={{ y: -4, boxShadow: "0 18px 40px -24px rgba(15, 23, 42, 0.35)" }}
               onClick={() => onSelectProject(project)}
-              className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm cursor-pointer flex gap-4 group"
+              className="group flex min-h-[112px] cursor-pointer items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:border-blue-200"
             >
-              <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                <project.icon size={32} />
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+                <project.icon size={26} />
               </div>
-              <div className="flex flex-col justify-between min-w-0">
-                <div className="space-y-1">
-                  <h3 className="font-bold text-gray-800 truncate">{project.title}</h3>
-                  <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">{project.desc}</p>
+
+              <div className="flex min-w-0 flex-1 flex-col justify-center gap-2">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <h3 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900">{project.title}</h3>
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(event) => handleEditProject(event, project.title)}
+                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                      title="编辑"
+                    >
+                      <Edit3 size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => handleDeleteProject(event, project.title)}
+                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                      title="删除"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-2">
-                  更新时间：{project.time}
+
+                <div className="truncate text-xs font-medium text-gray-500">
+                  {project.createdBy} 创建于{project.createdAt}
                 </div>
               </div>
             </motion.div>
