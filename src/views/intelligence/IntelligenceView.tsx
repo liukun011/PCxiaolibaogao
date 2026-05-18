@@ -859,7 +859,7 @@ export const IntelligenceView = ({ onBack, onComplete, initialCompanyName = "", 
                   <div className="px-6 py-4 border-b border-blue-100 bg-blue-50/30 flex items-center justify-between">
                     <h3 className="font-bold text-blue-900 flex items-center gap-2">
                       <MessageSquare size={18} className="text-blue-600" />
-                      AI 访谈问题清单预览
+                      AI 访谈问题预览
                     </h3>
                     <button
                       onClick={() => setActiveTab("questions")}
@@ -898,7 +898,7 @@ export const IntelligenceView = ({ onBack, onComplete, initialCompanyName = "", 
                       <MessageSquare size={14} />
                       <span>访谈清单已生成</span>
                     </div>
-                    <h2 className="text-3xl font-bold">访谈问题清单 (预制 + 补充)</h2>
+                    <h2 className="text-3xl font-bold">访谈问题 (预制 + 补充)</h2>
                     <p className="text-blue-100 max-w-xl">小狸已根据上传资料及全网抓取的风险点，为您自动生成了针对性的访谈问题。</p>
                   </div>
                   <div className="absolute right-[-40px] top-[-40px] opacity-10">

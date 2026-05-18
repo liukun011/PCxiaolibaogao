@@ -30,6 +30,7 @@ import {
 type DocumentClassificationSectionProps = {
   sectionNumber: number;
   title: string;
+  hideHeader?: boolean;
   onFilesStateChange?: (hasFiles: boolean) => void;
   initialFiles?: Array<{
     name: string;
@@ -118,7 +119,8 @@ type FolderTreeNodeData = {
   children: FolderTreeNodeData[];
 };
 
-const DEFAULT_UPLOAD_FOLDER = '上传文件';
+const DEFAULT_UPLOAD_FOLDER = '企业资料';
+const LEGACY_UPLOAD_FOLDER = '上传文件';
 const INTERVIEW_FOLDER = '访谈录音';
 const NOTE_FOLDER = '笔记';
 const DEFAULT_MATERIAL_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER];
@@ -146,6 +148,7 @@ const normalizeFolderPath = (path: string) =>
     .split('/')
     .map((segment) => segment.trim())
     .filter(Boolean)
+    .map((segment, index) => (index === 0 && segment === LEGACY_UPLOAD_FOLDER ? DEFAULT_UPLOAD_FOLDER : segment))
     .join('/');
 
 const getFolderName = (path: string) => path.split('/').filter(Boolean).at(-1) ?? '';
@@ -409,7 +412,7 @@ const UploadActionMenu = ({
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
             >
               <FileText size={14} />
-              上传文件
+              企业资料
             </button>
             <button
               type="button"
@@ -485,6 +488,7 @@ const FolderTreeNode = ({
 export const DocumentClassificationSection = ({
   sectionNumber,
   title,
+  hideHeader = false,
   onFilesStateChange,
   initialFiles = [],
 }: DocumentClassificationSectionProps) => {
@@ -1282,12 +1286,14 @@ export const DocumentClassificationSection = ({
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800">
-          <div className="h-6 w-1.5 rounded-full bg-blue-600" />
-          {sectionNumber}. {title}
-        </h2>
-      </div>
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800">
+            <div className="h-6 w-1.5 rounded-full bg-blue-600" />
+            {sectionNumber}. {title}
+          </h2>
+        </div>
+      )}
 
       <input
         type="file"
@@ -1333,9 +1339,9 @@ export const DocumentClassificationSection = ({
       )}
 
       {hasMaterials ? (
-        <div className={`grid gap-4 ${selectedFile ? 'xl:grid-cols-[220px_minmax(0,1fr)_320px]' : 'xl:grid-cols-[220px_minmax(0,1fr)]'}`}>
-          <aside className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="max-h-[30rem] space-y-1 overflow-y-auto pr-1">
+        <div className={`grid h-[calc(100vh-13.5rem)] min-h-[42rem] grid-cols-1 items-stretch gap-4 xl:grid-cols-[240px_minmax(0,1fr)_320px]`}>
+          <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="h-full space-y-1 overflow-y-auto pr-1">
               {folderTree.map((node) => (
                 <div key={node.path}>
                   <FolderTreeNode
@@ -1351,8 +1357,8 @@ export const DocumentClassificationSection = ({
             </div>
           </aside>
 
-          <div className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-5 py-4">
+          <div className="flex h-full min-h-0 min-w-0 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="shrink-0 border-b border-gray-100 px-5 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   {breadcrumbs.length > 0 && (
@@ -1467,7 +1473,7 @@ export const DocumentClassificationSection = ({
               </div>
             </div>
 
-            <div className="max-h-[34rem] overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {currentFolders.length > 0 && (
                 <div className="border-b border-gray-100 px-3 py-2">
                   {currentFolders.map((folderPath) => (
@@ -1611,11 +1617,12 @@ export const DocumentClassificationSection = ({
             </div>
           </div>
 
-          {selectedFile && (
-          <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-bold uppercase tracking-wider text-gray-400">文件详情</div>
+          <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            {selectedFile ? (
+            <>
+              <div className="shrink-0 text-xs font-bold uppercase tracking-wider text-gray-400">文件详情</div>
 
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                 <div>
                   <div className="text-lg font-bold text-gray-900">{selectedFile.title}</div>
                   <div className="mt-1 break-all text-xs text-gray-400">{selectedFile.name}</div>
@@ -1740,8 +1747,15 @@ export const DocumentClassificationSection = ({
                 </div>
 
               </div>
+            </>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-400">
+                <Eye size={28} className="mb-3 opacity-30" />
+                <p className="font-medium">选择左侧文件查看详情</p>
+                <p className="mt-1 text-xs">摘要、标签和转写内容会显示在这里。</p>
+              </div>
+            )}
           </aside>
-          )}
         </div>
       ) : (
         <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-10 text-center shadow-sm">
@@ -1750,7 +1764,7 @@ export const DocumentClassificationSection = ({
           </div>
           <h3 className="mt-4 text-lg font-bold text-gray-800">按文件夹方式管理资料</h3>
           <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-            目录区更轻，文件区更紧凑，摘要放到详情面板里。先建目录再上传，或者直接上传整个文件夹都可以。
+            左侧管理目录，右侧查看文件列表。先建目录再上传，或者直接上传整个文件夹都可以。
           </p>
           <div className="mt-6 flex justify-center gap-3">
             <button

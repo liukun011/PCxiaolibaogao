@@ -718,7 +718,7 @@ export default function App() {
 
                   {/* Questions List */}
                   <div className="space-y-3">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">访谈问题清单</h4>
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">访谈问题</h4>
                     <div className="space-y-3">
                       {mockInterview.questions.map((q, idx) => (
                         <div

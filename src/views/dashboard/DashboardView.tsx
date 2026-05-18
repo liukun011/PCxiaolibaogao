@@ -378,7 +378,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const projectName = intelligenceResult?.companyName || "A公司";
   const dashboardProjectName = intelligenceResult?.projectName?.trim() || "未命名尽调项目";
   const dashboardCompanyName = intelligenceResult?.companyName?.trim() || "未填写企业名称";
-  const questionsSectionRef = useRef<HTMLElement>(null);
+  const questionsSectionRef = useRef<HTMLDivElement>(null);
   const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
 
   useEffect(() => {
@@ -486,6 +486,9 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [newQuestionInput, setNewQuestionInput] = useState("");
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [hasDocumentMaterials, setHasDocumentMaterials] = useState(false);
+  const [activeMaterialsTab, setActiveMaterialsTab] = useState<"documents" | "questions">(
+    initialSection === "questions" ? "questions" : "documents",
+  );
   const [pendingQuestions, setPendingQuestions] = useState<{ category: string, question: string, source: string, type: string, selected: boolean }[]>([]);
   const [questionListMode, setQuestionListMode] = useState<"default" | "ai">("default");
   const [currentPresetTemplate, setCurrentPresetTemplate] = useState<string>(intelligenceResult?.template || "bank");
@@ -622,6 +625,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     if (initialSection !== "questions") return;
 
     const timer = window.setTimeout(() => {
+      setActiveMaterialsTab("questions");
       questionsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       onSectionHandled?.();
     }, 80);
@@ -678,7 +682,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
       "正在整理企业抓取结果与已有资料...",
       "正在识别高风险追问点与管理层答复缺口...",
       "正在生成分主题访谈问题，并进行重复问题合并...",
-      "正在输出可直接导入的问题清单...",
+      "正在输出可直接导入的问题...",
     ];
 
     logs.forEach((log, index) => {
@@ -760,7 +764,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
 
   const handleSelectPresetTemplate = (templateId: string) => {
     if (templateId !== currentPresetTemplate) {
-      const nextTemplateLabel = questionCollections.find((item) => item.id === templateId)?.title || "新的问题清单";
+      const nextTemplateLabel = questionCollections.find((item) => item.id === templateId)?.title || "新的问题";
       const confirmed = window.confirm(`确认切换到“${nextTemplateLabel}”吗？`);
       if (!confirmed) return;
     }
@@ -990,7 +994,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const currentCollection = questionCollections.find((item) => item.id === currentPresetTemplate);
   const presetQuestions = currentCollection?.questions || [];
   const activeQuestions = questions.filter((q) => !(q.type === "preset" || q.source.includes("模板预设") || q.source.includes("系统预制")));
-  const currentPresetTemplateLabel = currentCollection?.title || "问题清单";
+  const currentPresetTemplateLabel = currentCollection?.title || "问题";
   const selectedAIQuestionCount = pendingQuestions.filter((q) => q.selected).length;
   const interviewMaterials = [
     {
@@ -1517,21 +1521,46 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         )}
 
         {/* Materials Sections */}
-        <div className="space-y-8">
-          <DocumentClassificationSection
-            sectionNumber={1}
-            title="尽调资料"
-            onFilesStateChange={setHasDocumentMaterials}
-            initialFiles={interviewMaterials}
-          />
+        <div ref={questionsSectionRef} className="space-y-5">
+          <div className="border-b border-gray-100">
+            <div className="flex items-center gap-8">
+              {[
+                { id: "documents", label: "尽调资料" },
+                { id: "questions", label: "访谈问题" },
+              ].map((tab) => {
+                const isActive = activeMaterialsTab === tab.id;
 
-          {/* 2. 访谈问题清单 */}
-          <section ref={questionsSectionRef} className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                2. 访谈问题清单
-              </h2>
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveMaterialsTab(tab.id as "documents" | "questions")}
+                    className={`relative pb-3 text-sm font-bold transition-colors ${
+                      isActive
+                        ? "text-blue-600 after:absolute after:bottom-[-1px] after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-blue-600"
+                        : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={activeMaterialsTab === "documents" ? "block" : "hidden"}>
+            <DocumentClassificationSection
+              sectionNumber={1}
+              title="尽调资料"
+              hideHeader
+              onFilesStateChange={setHasDocumentMaterials}
+              initialFiles={interviewMaterials}
+            />
+          </div>
+
+          <div className={activeMaterialsTab === "questions" ? "block" : "hidden"}>
+          <section className="space-y-4">
+            <div className="flex items-center justify-end">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleOpenAIQuestionList}
@@ -1556,7 +1585,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                   onClick={handleOpenQuestionListSwitch}
                   className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
                 >
-                  <span>切换问题清单</span>
+                  <span>切换问题</span>
                 </button>
                 {questionListMode === "default" && (
                   <button
@@ -1574,7 +1603,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-gray-50 bg-gray-50/30 flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {questionListMode === "ai" ? "AI洞察问题清单" : "当前问题清单"}
+                  {questionListMode === "ai" ? "AI洞察问题" : "当前问题"}
                 </span>
                 {questionListMode === "ai" ? (
                   <div className="flex items-center gap-2">
@@ -1594,7 +1623,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                       disabled={pendingQuestions.filter(q => q.selected).length === 0}
                       className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      导入到当前清单
+                      导入到当前问题
                     </button>
                   </div>
                 ) : (
@@ -1669,7 +1698,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <h3 className="text-base font-bold text-slate-900">AI洞察生成中</h3>
-                                <p className="mt-1 text-sm text-slate-500">正在后台生成补充问题，你可以继续编辑当前问题清单。</p>
+                                <p className="mt-1 text-sm text-slate-500">正在后台生成补充问题，你可以继续编辑当前问题。</p>
                               </div>
                               <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
                                 {Math.min(aiInsightLogs.length + 1, 4)}/4
@@ -1788,9 +1817,9 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                   <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-blue-900">AI洞察问题清单</p>
+                        <p className="text-sm font-bold text-blue-900">AI洞察问题</p>
                         <p className="mt-1 text-sm text-blue-800">
-                          这里展示 AI 洞察生成的补充访谈问题，勾选后可一键导入到当前访谈问题清单。
+                          这里展示 AI 洞察生成的补充访谈问题，勾选后可一键导入到当前访谈问题。
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1835,7 +1864,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <h3 className="text-base font-bold text-slate-900">AI洞察生成中</h3>
-                              <p className="mt-1 text-sm text-slate-500">正在把抓取结果转成可直接访谈的问题清单</p>
+                              <p className="mt-1 text-sm text-slate-500">正在把抓取结果转成可直接访谈的问题</p>
                             </div>
                             <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
                               {Math.min(aiInsightLogs.length + 1, 4)}/4
@@ -1943,6 +1972,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               </div>
             </div>
           </section>
+          </div>
         </div>
         {/* AI 智能分析确认弹窗恢复展示 */}
         {true && (
@@ -2027,7 +2057,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 className="relative w-full max-w-lg rounded-[1.75rem] bg-white p-6 shadow-2xl"
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900">选择问题清单</h3>
+                  <h3 className="text-base font-bold text-slate-900">选择问题模板</h3>
                   <button
                     onClick={() => setShowPresetTemplatePanel(false)}
                     className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -2084,7 +2114,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                     <div>
                       <h4 className="text-sm font-bold text-slate-900">AI洞察已生成完成</h4>
                       <p className="mt-1 text-xs leading-6 text-slate-500">
-                        已生成 {pendingQuestions.length} 个补充问题，可直接导入访谈问题清单。
+                        已生成 {pendingQuestions.length} 个补充问题，可直接导入访谈问题。
                       </p>
                     </div>
                     <button
