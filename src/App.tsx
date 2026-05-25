@@ -409,11 +409,11 @@ export default function App() {
         </div>
 
         <nav className="flex-1 py-4">
-          <SidebarItem icon={ClipboardCheck} label="尽调管理" active={currentView === "projectList" || currentView === "dashboard"} onClick={() => {
+          <SidebarItem icon={ClipboardCheck} label="报告管理" active={currentView === "projectList" || currentView === "dashboard"} onClick={() => {
             setStandaloneShell(false);
             setCurrentView("projectList");
           }} />
-          <SidebarItem icon={BookOpen} label="我的模板" active={currentView === "templates"} onClick={() => {
+          <SidebarItem icon={BookOpen} label="报告模板" active={currentView === "templates"} onClick={() => {
             setStandaloneShell(false);
             setCurrentView("templates");
           }} />

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+﻿﻿import React, { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -147,7 +147,7 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
       {
         title: "资料清单已锁定",
         summary: "已接收财报、合同、流水、工商、访谈等 126 份资料，开始做格式与完整性检查。",
-        source: "尽调资料 / 上传清单",
+        source: "报告资料 / 上传清单",
         progress: 6,
         documentCount: 8,
         evidenceCount: 0,
@@ -829,10 +829,10 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     ];
 
     const summary = [
-      `# ${company} 尽调总结`,
+      `# ${company} 资料总结`,
       "",
       `## 企业画像`,
-      `${company} 当前尽调资料显示，企业法定代表人为 ${legalPerson}，注册资本为 ${capital}，所属行业为 ${industry}，注册地址为 ${location}。现有数据已覆盖主体工商、基础经营信息、风险线索与访谈问题，能够支持形成初步尽调判断。`,
+      `${company} 当前报告资料显示，企业法定代表人为 ${legalPerson}，注册资本为 ${capital}，所属行业为 ${industry}，注册地址为 ${location}。现有数据已覆盖主体工商、基础经营信息、风险线索与访谈问题，能够支持形成初步尽调判断。`,
       "",
       `## 关键发现`,
       `1. 主体信息方面，企业名称、法定代表人、注册资本、成立日期和注册地址等字段已完成汇总，后续应重点核验工商口径与授信申请资料是否一致。`,
@@ -1109,7 +1109,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2 text-sm text-gray-500">
-              <span className="cursor-pointer hover:text-blue-600" onClick={onBack}>尽调管理</span>
+              <span className="cursor-pointer hover:text-blue-600" onClick={onBack}>报告管理</span>
               <ChevronRight size={14} />
               <span className="truncate font-medium text-gray-800">{dashboardProjectName}</span>
               <button
@@ -1318,7 +1318,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               ) : (
                 <Sparkles size={16} />
               )}
-              <span>{dueDiligenceSummaryStatus === "generated" ? "查看尽调总结" : "尽调总结"}</span>
+              <span>{dueDiligenceSummaryStatus === "generated" ? "查看资料总结" : "资料总结"}</span>
             </button>
             <button
               onClick={() => setShowTemplateSwitchModal(true)}
@@ -1525,7 +1525,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
           <div className="border-b border-gray-100">
             <div className="flex items-center gap-8">
               {[
-                { id: "documents", label: "尽调资料" },
+                { id: "documents", label: "报告资料" },
                 { id: "questions", label: "访谈问题" },
               ].map((tab) => {
                 const isActive = activeMaterialsTab === tab.id;
@@ -1551,7 +1551,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
           <div className={activeMaterialsTab === "documents" ? "block" : "hidden"}>
             <DocumentClassificationSection
               sectionNumber={1}
-              title="尽调资料"
+              title="报告资料"
               hideHeader
               onFilesStateChange={setHasDocumentMaterials}
               initialFiles={interviewMaterials}
@@ -2523,7 +2523,7 @@ const DueDiligenceSummaryPanel = ({
       return (
         <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center">
           <Sparkles size={28} className="text-slate-300" />
-          <p className="mt-3 text-sm font-medium text-slate-500">点击重新生成后，将在这里输出尽调总结。</p>
+          <p className="mt-3 text-sm font-medium text-slate-500">点击重新生成后，将在这里输出资料总结。</p>
         </div>
       );
     }
@@ -2574,7 +2574,7 @@ const DueDiligenceSummaryPanel = ({
                   {status === "generating" ? <RefreshCw size={20} className="animate-spin" /> : <ClipboardCheck size={20} />}
                 </div>
                 <div className="min-w-0">
-                    <h3 className="truncate text-[13px] font-bold text-slate-900">尽调总结</h3>
+                    <h3 className="truncate text-[13px] font-bold text-slate-900">资料总结</h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
                     {companyName} 的企业数据总结，支持生成后查看与重新生成。
                   </p>
@@ -2593,7 +2593,7 @@ const DueDiligenceSummaryPanel = ({
                 <button
                   onClick={onClose}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
-                  aria-label="关闭尽调总结"
+                  aria-label="关闭资料总结"
                 >
                   <X size={16} />
                 </button>

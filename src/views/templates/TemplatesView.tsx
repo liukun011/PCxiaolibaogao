@@ -412,7 +412,7 @@ export const TemplatesView = ({
     <div className="flex h-full flex-col overflow-hidden bg-slate-50 p-8">
       <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h1 className="text-base font-bold text-gray-800">我的模板</h1>
+          <h1 className="text-base font-bold text-gray-800">报告模板</h1>
           <p className="mt-2 text-sm text-gray-500">模板的业务规则是否合理，决定报告生成的准确性。</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+﻿﻿import React, { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -148,7 +148,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
     <div className="flex-1 flex flex-col bg-white">
       {/* Header */}
       <header className="h-16 px-8 flex items-center justify-between border-b border-gray-100 shrink-0">
-        <h1 className="text-base font-bold text-gray-800">尽调管理</h1>
+        <h1 className="text-base font-bold text-gray-800">报告管理</h1>
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -166,7 +166,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
             >
               <PlusCircle size={16} />
-              <span>新建尽调项目</span>
+              <span>新建报告项目</span>
             </button>
           </div>
         </div>
@@ -191,7 +191,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
             >
               <div className="p-8 space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-gray-900">新建尽调项目</h3>
+                  <h3 className="text-base font-bold text-gray-900">新建报告项目</h3>
                   <button onClick={() => setShowDirectNewModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                     <X size={20} className="text-gray-400" />
                   </button>
@@ -214,7 +214,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 ml-1">
-                          企业名称 / 信用代码
+                          企业名称
                         </label>
                         <input
                           type="text"
@@ -227,7 +227,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700 ml-1">请选择初始尽调模板</label>
+                      <label className="text-sm font-bold text-gray-700 ml-1">请选择初始报告模板</label>
                       <div className="relative">
                         <select
                           value={selectedTemplate}
