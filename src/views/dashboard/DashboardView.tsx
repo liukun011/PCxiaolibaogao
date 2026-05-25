@@ -1370,7 +1370,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                           <BrainCircuit size={28} className="animate-pulse drop-shadow-sm" />
                         </div>
                         <div>
-                          <h2 className="text-lg font-black bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent mb-1">
+                          <h2 className="text-sm font-bold bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent mb-1">
                             企业数据抓取中
                           </h2>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1392,7 +1392,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                         <BrainCircuit size={24} />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-gray-800">企业数据抓取已完成</h2>
+                        <h2 className="text-[13px] font-bold text-gray-800">企业数据抓取已完成</h2>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1424,7 +1424,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                         <BrainCircuit size={24} />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-gray-800">企业大数据获取</h2>
+                        <h2 className="text-[13px] font-bold text-gray-800">企业大数据获取</h2>
                         <p className="text-gray-400 text-xs mt-0.5">企业工商、风控大数据获取，多维度分析企业状况</p>
                       </div>
                     </div>
@@ -1453,7 +1453,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                     <BrainCircuit size={28} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-800">企业大数据获取结果</h2>
+                    <h2 className="text-base font-bold text-gray-800">企业大数据获取结果</h2>
                     <p className="text-sm text-blue-600 font-medium">深度扫描结果 · {intelligenceResult.companyData?.overview?.industry}</p>
                   </div>
                 </div>
@@ -1469,7 +1469,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 <div className="space-y-8">
                   <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
                     <div className="flex items-center justify-between gap-4">
-                      <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                      <h3 className="text-[13px] font-bold text-gray-800 flex items-center gap-2">
                         <Briefcase size={18} className="text-blue-600" />
                         企业概况
                       </h3>
@@ -1478,7 +1478,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                       {companyOverviewItems.map((item) => (
                         <div key={item.label} className="rounded-2xl bg-white px-4 py-4 shadow-sm">
                           <p className="text-xs font-medium text-gray-400">{item.label}</p>
-                          <p className="mt-2 text-sm font-bold leading-6 text-gray-800 break-all">{item.value}</p>
+                          <p className="mt-2 text-sm font-medium leading-relaxed text-gray-800 break-all">{item.value}</p>
                         </div>
                       ))}
                     </div>
@@ -1488,14 +1488,14 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                       <div className="flex items-center gap-2">
                         <ShieldAlert size={18} className="text-blue-600" />
-                        <h3 className="text-base font-bold text-gray-800">抓取结果明细</h3>
+                        <h3 className="text-[13px] font-bold text-gray-800">抓取结果明细</h3>
                       </div>
 
                       <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
                         {detailSummaryItems.map((item) => (
                           <div key={`${item.label}-${item.value}`} className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-4">
                             <p className="text-xs font-medium text-gray-400">{item.label}</p>
-                            <p className={`mt-2 text-sm font-semibold leading-6 break-all ${"tone" in item && item.tone ? item.tone : "text-gray-800"}`}>
+                            <p className={`mt-2 text-sm font-medium leading-relaxed break-all ${"tone" in item && item.tone ? item.tone : "text-gray-800"}`}>
                               {item.value}
                             </p>
                           </div>
@@ -1535,7 +1535,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveMaterialsTab(tab.id as "documents" | "questions")}
-                    className={`relative pb-3 text-sm font-bold transition-colors ${
+                      className={`relative pb-3 text-[13px] font-bold transition-colors ${
                       isActive
                         ? "text-blue-600 after:absolute after:bottom-[-1px] after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-blue-600"
                         : "text-gray-500 hover:text-gray-800"
@@ -1697,7 +1697,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <h3 className="text-base font-bold text-slate-900">AI洞察生成中</h3>
+                                <h3 className="text-[13px] font-bold text-slate-900">AI洞察生成中</h3>
                                 <p className="mt-1 text-sm text-slate-500">正在后台生成补充问题，你可以继续编辑当前问题。</p>
                               </div>
                               <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
@@ -1817,7 +1817,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                   <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-blue-900">AI洞察问题</p>
+                        <p className="text-[13px] font-bold text-blue-900">AI洞察问题</p>
                         <p className="mt-1 text-sm text-blue-800">
                           这里展示 AI 洞察生成的补充访谈问题，勾选后可一键导入到当前访谈问题。
                         </p>
@@ -1863,7 +1863,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <h3 className="text-base font-bold text-slate-900">AI洞察生成中</h3>
+                                <h3 className="text-[13px] font-bold text-slate-900">AI洞察生成中</h3>
                               <p className="mt-1 text-sm text-slate-500">正在把抓取结果转成可直接访谈的问题</p>
                             </div>
                             <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
@@ -1928,7 +1928,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                                 {q.selected ? '已选中' : '点击选中'}
                               </div>
                             </div>
-                            <p className={`text-base font-semibold leading-7 transition-colors ${q.selected ? 'text-blue-950' : 'text-gray-800'
+                            <p className={`text-sm font-medium leading-relaxed transition-colors ${q.selected ? 'text-blue-950' : 'text-gray-800'
                               }`}>
                               {q.question}
                             </p>
@@ -1996,7 +1996,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                   <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center text-amber-600 mx-auto">
                     <Clock size={40} />
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900">确认开始企业数据抓取？</h2>
+                  <h2 className="text-base font-bold text-slate-900">确认开始企业数据抓取？</h2>
                   <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-left space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="mt-1 text-blue-600"><Zap size={16} /></div>
@@ -2057,7 +2057,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 className="relative w-full max-w-lg rounded-[1.75rem] bg-white p-6 shadow-2xl"
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900">选择问题模板</h3>
+                  <h3 className="text-[13px] font-bold text-slate-900">选择问题模板</h3>
                   <button
                     onClick={() => setShowPresetTemplatePanel(false)}
                     className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -2078,7 +2078,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                         className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${isActive ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200" : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
                       >
                         <div>
-                          <div className="text-sm font-bold text-slate-900">{template.title}</div>
+                          <div className="text-[13px] font-bold text-slate-900">{template.title}</div>
                           <div className="mt-1 text-xs text-slate-500">{templateQuestions.length} 个预制问题</div>
                         </div>
                         {isActive ? (
@@ -2112,7 +2112,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900">AI洞察已生成完成</h4>
+                        <h4 className="text-[13px] font-bold text-slate-900">AI洞察已生成完成</h4>
                       <p className="mt-1 text-xs leading-6 text-slate-500">
                         已生成 {pendingQuestions.length} 个补充问题，可直接导入访谈问题。
                       </p>
@@ -2223,7 +2223,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-3">
-                  <h4 className="truncate text-sm font-bold text-slate-900">报告后台生成中</h4>
+                  <h4 className="truncate text-[13px] font-bold text-slate-900">报告后台生成中</h4>
                   <span className="shrink-0 text-xs font-black text-blue-600">{currentReportEvent.progress}%</span>
                 </div>
                 <p className="mt-1 line-clamp-1 text-xs text-slate-500">{currentReportEvent.title}</p>
@@ -2283,7 +2283,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">修改</h3>
+                  <h3 className="text-[15px] font-bold text-slate-900">修改</h3>
                   <p className="mt-1 text-sm text-slate-500">可在这里调整尽调项目名称和企业名称。</p>
                 </div>
                 <button
@@ -2351,7 +2351,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">更换模板</h3>
+                  <h3 className="text-[15px] font-bold text-slate-900">更换模板</h3>
                   <p className="mt-1 text-sm text-slate-500">重新选择当前尽调报告使用的模板。</p>
                 </div>
                 <button
@@ -2399,7 +2399,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                         </div>
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-2">
-                            <p className="truncate text-sm font-bold text-slate-900">{template.name}</p>
+                            <p className="truncate text-[13px] font-bold text-slate-900">{template.name}</p>
                             <span
                               className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                 isDisabled ? "bg-slate-200 text-slate-500" : "bg-green-50 text-green-600"
@@ -2532,7 +2532,7 @@ const DueDiligenceSummaryPanel = ({
       <div className="space-y-3">
         {summary.split("\n").map((line, index) => {
           if (line.startsWith("# ")) {
-            return <h3 key={index} className="text-xl font-black text-slate-900">{line.replace("# ", "")}</h3>;
+              return <h3 key={index} className="text-[15px] font-bold text-slate-900">{line.replace("# ", "")}</h3>;
           }
           if (line.startsWith("## ")) {
             return <h4 key={index} className="pt-3 text-sm font-black text-blue-700">{line.replace("## ", "")}</h4>;
@@ -2574,7 +2574,7 @@ const DueDiligenceSummaryPanel = ({
                   {status === "generating" ? <RefreshCw size={20} className="animate-spin" /> : <ClipboardCheck size={20} />}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="truncate text-base font-bold text-slate-900">尽调总结</h3>
+                    <h3 className="truncate text-[13px] font-bold text-slate-900">尽调总结</h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
                     {companyName} 的企业数据总结，支持生成后查看与重新生成。
                   </p>
@@ -2696,7 +2696,7 @@ const ReportGenerationWorkbench = ({
                     {status === "generated" ? <CheckCircle2 size={20} /> : <Sparkles size={20} />}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="truncate text-base font-bold text-slate-900">尽调报告生成过程</h3>
+                      <h3 className="truncate text-[13px] font-bold text-slate-900">尽调报告生成过程</h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       展示 AI 处理摘要、证据来源和阶段性发现，便于跟踪与复核。
                     </p>
@@ -2771,25 +2771,25 @@ const ReportGenerationWorkbench = ({
                   <div className="mt-2 flex items-center gap-2">
                     {status === "generating" && <RefreshCw size={14} className="shrink-0 animate-spin text-blue-600" />}
                     {status === "generated" && <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />}
-                    <span className="truncate text-sm font-bold text-slate-900">{currentStage.title}</span>
+                    <span className="truncate text-[13px] font-bold text-slate-900">{currentStage.title}</span>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="text-xs font-bold text-slate-400">资料处理</p>
-                  <p className="mt-2 text-sm font-bold text-slate-900">{processedDocuments} / 126 份文档</p>
+                  <p className="mt-2 text-[13px] font-bold text-slate-900">{processedDocuments} / 126 份文档</p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="text-xs font-bold text-slate-400">证据与剩余时间</p>
-                  <p className="mt-2 text-sm font-bold text-slate-900">{evidenceCount} 条证据 · {eta}</p>
+                  <p className="mt-2 text-[13px] font-bold text-slate-900">{evidenceCount} 条证据 · {eta}</p>
                 </div>
               </div>
             </div>
 
             <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
               <aside className="border-b border-slate-100 bg-white p-5 lg:border-b-0 lg:border-r lg:p-6">
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  <div className="flex items-center gap-2 text-[13px] font-bold text-slate-900">
                   <ClipboardCheck size={16} className="text-blue-600" />
                   <span>阶段路线</span>
                 </div>
@@ -2816,7 +2816,7 @@ const ReportGenerationWorkbench = ({
                         </div>
                         <div className="min-w-0 pb-2">
                           <div className="flex min-w-0 items-center gap-2">
-                            <p className={`truncate text-sm font-bold ${state === "pending" ? "text-slate-500" : "text-slate-900"}`}>
+                              <p className={`truncate text-[13px] font-bold ${state === "pending" ? "text-slate-500" : "text-slate-900"}`}>
                               {stage.title}
                             </p>
                             <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
@@ -2843,7 +2843,7 @@ const ReportGenerationWorkbench = ({
               <section className="min-h-0 overflow-y-auto p-5 lg:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-slate-900">实时处理摘要</h4>
+                      <h4 className="text-[13px] font-bold text-slate-900">实时处理摘要</h4>
                     <p className="mt-1 text-xs text-slate-500">每完成一个处理动作，系统会输出摘要、来源和当前指标。</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-500">
@@ -2875,7 +2875,7 @@ const ReportGenerationWorkbench = ({
                             {event.tone === "warning" ? "需关注" : event.tone === "success" ? "已完成" : "处理中"}
                           </span>
                         </div>
-                        <h5 className="mt-3 text-sm font-bold text-slate-900">{event.title}</h5>
+                        <h5 className="mt-3 text-[13px] font-bold text-slate-900">{event.title}</h5>
                         <p className="mt-2 text-sm leading-6 text-slate-600">{event.summary}</p>
                         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
                           <span className="inline-flex items-center gap-1.5">
@@ -2895,7 +2895,7 @@ const ReportGenerationWorkbench = ({
               <aside className="border-t border-slate-100 bg-slate-50/70 p-5 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">阶段性发现</h4>
+                      <h4 className="text-[13px] font-bold text-slate-900">阶段性发现</h4>
                     <p className="mt-1 text-xs text-slate-500">边生成边沉淀风险、缺口和质检结果。</p>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 shadow-sm">
@@ -2937,4 +2937,3 @@ const ReportGenerationWorkbench = ({
 };
 
 // Intelligence View Component
-

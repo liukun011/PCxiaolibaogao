@@ -148,7 +148,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
     <div className="flex-1 flex flex-col bg-white">
       {/* Header */}
       <header className="h-16 px-8 flex items-center justify-between border-b border-gray-100 shrink-0">
-        <h1 className="text-xl font-bold text-gray-800">尽调管理</h1>
+        <h1 className="text-base font-bold text-gray-800">尽调管理</h1>
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -191,7 +191,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
             >
               <div className="p-8 space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-gray-900">新建尽调项目</h3>
+                  <h3 className="text-base font-bold text-gray-900">新建尽调项目</h3>
                   <button onClick={() => setShowDirectNewModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                     <X size={20} className="text-gray-400" />
                   </button>
@@ -303,7 +303,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
 
               <div className="flex min-w-0 flex-1 flex-col justify-center gap-2">
                 <div className="flex min-w-0 items-start justify-between gap-3">
-                  <h3 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900">{project.title}</h3>
+                  <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{project.title}</h3>
                   <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       type="button"
@@ -338,4 +338,3 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
 
 
 // Dashboard View Component (Project Detail)
-

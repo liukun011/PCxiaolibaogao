@@ -213,7 +213,7 @@ export const QuestionListView = ({
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-8 py-4 backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-800">问题清单</h1>
+            <h1 className="text-base font-bold text-gray-800">问题清单</h1>
             <p className="mt-1 text-sm text-gray-500">集中管理问题集合，并维护集合内的问题。</p>
           </div>
         </div>
