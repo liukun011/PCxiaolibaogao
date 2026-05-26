@@ -137,11 +137,27 @@ type ReportGenerationFinding = {
   status: string;
 };
 
+type ReportGenerationDetail = {
+  id: string;
+  stageId: string;
+  title: string;
+  description: string;
+  statusLabel: string;
+  alert?: string;
+  columns: string[];
+  rows: {
+    id: string;
+    cells: string[];
+    conflictCellIndex?: number;
+  }[];
+  tone: "blue" | "emerald" | "amber" | "red";
+};
+
 const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
   {
     id: "prepare",
-    title: "文档准备",
-    description: "校验文件完整性，识别页码、目录、表格和影像质量。",
+    title: "资料准备",
+    description: "校验资料完整性，识别页码、目录、表格和影像质量。",
     scope: "126 份资料",
     events: [
       {
@@ -167,15 +183,15 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
     ],
   },
   {
-    id: "classification",
-    title: "文档分类",
-    description: "按尽调主题拆分材料，建立后续抽取和交叉验证索引。",
-    scope: "7 类资料",
+    id: "planning",
+    title: "生成规划",
+    description: "确认报告模板、章节结构、抽取字段和证据校验策略。",
+    scope: "8 个章节",
     events: [
       {
-        title: "完成资料主题归档",
-        summary: "已将资料归入财务、合同、法务、股权、经营、人事、访谈 7 个主题，并标记关键页。",
-        source: "文档分类模型",
+        title: "确认报告生成方案",
+        summary: "已匹配授信调查报告模板，拆分企业基本情况、经营分析、财务分析、风险提示和尽调结论等章节。",
+        source: "报告模板 / 项目配置",
         progress: 24,
         documentCount: 41,
         evidenceCount: 18,
@@ -183,20 +199,20 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
         tone: "success",
       },
       {
-        title: "识别缺口材料",
-        summary: "银行流水缺少 2024 年 9 月明细，部分销售合同缺验收附件，已加入复核清单。",
-        source: "文件完整性规则",
+        title: "生成抽取与复核清单",
+        summary: "已将财务指标、合同履约、股权变更、访谈事实和材料缺口拆成可跟踪任务，并绑定预期证据来源。",
+        source: "生成规划智能体",
         progress: 32,
         documentCount: 56,
         evidenceCount: 27,
         eta: "约 5 分钟",
-        tone: "warning",
+        tone: "success",
       },
     ],
   },
   {
     id: "extraction",
-    title: "关键信息抽取",
+    title: "数据抽取",
     description: "抽取主体、财务指标、重大合同、诉讼、担保和访谈事实。",
     scope: "42 个字段",
     events: [
@@ -220,14 +236,6 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
         eta: "约 3 分钟",
         tone: "warning",
       },
-    ],
-  },
-  {
-    id: "risk",
-    title: "风险识别",
-    description: "识别财务、合同、合规、股权和经营依赖风险。",
-    scope: "18 条线索",
-    events: [
       {
         title: "识别收入与回款风险",
         summary: "应收账款增长快于收入增长，回款周期较上一期拉长，已标记为中高风险线索。",
@@ -235,16 +243,6 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
         progress: 66,
         documentCount: 94,
         evidenceCount: 82,
-        eta: "约 2 分钟",
-        tone: "warning",
-      },
-      {
-        title: "识别合同履约风险",
-        summary: "部分大额合同签署时间接近报告期末，且缺少验收单或物流凭证，待交叉验证。",
-        source: "销售合同 / 验收附件",
-        progress: 74,
-        documentCount: 105,
-        evidenceCount: 97,
         eta: "约 2 分钟",
         tone: "warning",
       },
@@ -256,6 +254,16 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
     description: "对金额、时间、主体和结论做多来源校验。",
     scope: "31 组校验",
     events: [
+      {
+        title: "识别合同履约风险",
+        summary: "部分大额合同签署时间接近报告期末，且缺少验收单或物流凭证，待交叉验证。",
+        source: "销售合同 / 验收附件",
+        progress: 74,
+        documentCount: 105,
+        evidenceCount: 97,
+        eta: "约 2 分钟",
+        tone: "warning",
+      },
       {
         title: "完成财务口径交叉验证",
         summary: "合同金额、销售台账和收入确认口径存在 2 处差异，已生成冲突标记。",
@@ -294,6 +302,14 @@ const REPORT_GENERATION_STAGES: ReportGenerationStage[] = [
         eta: "约 20 秒",
         tone: "success",
       },
+    ],
+  },
+  {
+    id: "complete",
+    title: "完成",
+    description: "完成质量检查、证据链归档和报告生成结果同步。",
+    scope: "162 条证据",
+    events: [
       {
         title: "完成质量检查",
         summary: "已检查引用存在性、数字前后一致性和未处理文档，4 项内容建议人工复核。",
@@ -319,7 +335,7 @@ const REPORT_GENERATION_EVENTS: ReportGenerationEvent[] = REPORT_GENERATION_STAG
 const REPORT_GENERATION_FINDINGS: ReportGenerationFinding[] = [
   {
     id: "receivable-risk",
-    stageId: "risk",
+    stageId: "extraction",
     severity: "高风险",
     title: "应收账款回款周期异常",
     summary: "应收账款周转天数由 90 天延长至 125 天，且增速高于收入增速。",
@@ -328,7 +344,7 @@ const REPORT_GENERATION_FINDINGS: ReportGenerationFinding[] = [
   },
   {
     id: "contract-proof",
-    stageId: "risk",
+    stageId: "verification",
     severity: "中风险",
     title: "部分合同缺少验收凭证",
     summary: "3 笔期末大额合同暂未匹配到完整验收单或物流签收记录。",
@@ -346,12 +362,114 @@ const REPORT_GENERATION_FINDINGS: ReportGenerationFinding[] = [
   },
   {
     id: "citation-check",
-    stageId: "drafting",
+    stageId: "complete",
     severity: "低风险",
     title: "引用来源完整性检查完成",
     summary: "36 处关键结论已绑定证据来源，4 处建议在提交前补充原始材料。",
     source: "报告质量检查规则",
     status: "已写入质检结果",
+  },
+];
+
+const REPORT_GENERATION_DETAILS: ReportGenerationDetail[] = [
+  {
+    id: "material-check",
+    stageId: "prepare",
+    title: "资料清单",
+    description: "已上传资料按类型和解析状态完成登记。",
+    statusLabel: "已提取",
+    columns: ["资料类别", "数量", "解析状态", "来源"],
+    rows: [
+      { id: "financial-report", cells: ["财务报表", "12 份", "已解析", "上传清单"] },
+      { id: "contract", cells: ["销售合同", "36 份", "已解析", "上传清单"] },
+      { id: "scan", cells: ["扫描件", "12 份", "OCR处理中", "OCR 队列"] },
+    ],
+    tone: "blue",
+  },
+  {
+    id: "field-plan",
+    stageId: "planning",
+    title: "抽取字段规划",
+    description: "报告章节、字段数量和复核规则已完成规划。",
+    statusLabel: "已规划",
+    columns: ["报告章节", "字段数", "复核规则", "来源"],
+    rows: [
+      { id: "basic", cells: ["企业基本情况", "10 个", "工商与申请材料一致性", "报告模板"] },
+      { id: "finance", cells: ["财务分析", "16 个", "报表、流水、台账交叉验证", "生成规划智能体"] },
+      { id: "risk", cells: ["风险提示", "8 个", "异常指标与证据链绑定", "生成规划智能体"] },
+    ],
+    tone: "emerald",
+  },
+  {
+    id: "equity-structure",
+    stageId: "extraction",
+    title: "股权结构",
+    description: "表格、股东、出资额和持股比例已抽取，但比例合计存在异常。",
+    statusLabel: "有冲突",
+    alert: "冲突提示：股权比例合计超过 100%，需要人工复核。",
+    columns: ["股东", "出资额", "持股比例", "来源"],
+    rows: [
+      { id: "shareholder-a", cells: ["A投资合伙企业", "600 万", "60%", "2 个文档片段"] },
+      { id: "shareholder-b", cells: ["B科技集团", "500 万", "50%", "1 个文档片段"], conflictCellIndex: 2 },
+    ],
+    tone: "amber",
+  },
+  {
+    id: "financial-metrics",
+    stageId: "extraction",
+    title: "财务指标",
+    description: "收入、利润、现金流和应收账款相关指标已完成抽取。",
+    statusLabel: "需关注",
+    alert: "关注提示：应收账款周转天数由 90 天延长至 125 天，需结合回款流水复核。",
+    columns: ["指标", "本期", "上期", "来源"],
+    rows: [
+      { id: "revenue", cells: ["营业收入", "8,200 万", "7,100 万", "2024 财务报表"] },
+      { id: "cash-flow", cells: ["经营现金流", "620 万", "780 万", "现金流量表"] },
+      { id: "receivable-days", cells: ["应收账款周转天数", "125 天", "90 天", "财报 / 明细账"], conflictCellIndex: 1 },
+    ],
+    tone: "amber",
+  },
+  {
+    id: "contract-verification",
+    stageId: "verification",
+    title: "合同履约核验",
+    description: "合同金额、签署时间和验收凭证已按证据来源汇总。",
+    statusLabel: "有缺口",
+    alert: "缺口提示：3 笔期末大额合同暂未匹配到完整验收单或物流签收记录。",
+    columns: ["合同编号", "合同金额", "验收凭证", "来源"],
+    rows: [
+      { id: "contract-a", cells: ["HT-2024-118", "320 万", "已匹配", "合同 / 验收单"] },
+      { id: "contract-b", cells: ["HT-2024-126", "280 万", "缺少验收单", "销售合同"], conflictCellIndex: 2 },
+      { id: "contract-c", cells: ["HT-2024-131", "190 万", "缺少物流凭证", "销售合同"], conflictCellIndex: 2 },
+    ],
+    tone: "amber",
+  },
+  {
+    id: "caliber-check",
+    stageId: "verification",
+    title: "口径差异",
+    description: "合同金额、销售台账和收入确认口径已完成交叉验证。",
+    statusLabel: "有冲突",
+    alert: "冲突提示：合同金额与收入确认存在 2 处差异，建议进入人工复核。",
+    columns: ["核验项", "合同台账", "财务口径", "来源"],
+    rows: [
+      { id: "amount-a", cells: ["Q4合同收入", "1,260 万", "1,180 万", "合同台账 / 财报"], conflictCellIndex: 2 },
+      { id: "date-a", cells: ["收入确认期间", "2024-12", "2025-01", "销售明细 / 明细账"], conflictCellIndex: 2 },
+    ],
+    tone: "amber",
+  },
+  {
+    id: "citation-check",
+    stageId: "complete",
+    title: "引用来源检查",
+    description: "关键结论、引用来源和待补充材料已完成质量检查。",
+    statusLabel: "已校验",
+    columns: ["检查项", "数量", "状态", "来源"],
+    rows: [
+      { id: "citation", cells: ["关键结论引用", "36 处", "已绑定", "证据链索引"] },
+      { id: "pending", cells: ["建议补充材料", "4 处", "待人工补充", "质量检查规则"] },
+    ],
+    tone: "emerald",
   },
 ];
 export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, onOpenTemplates, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult, initialSection, onSectionHandled, questionCollections, setQuestionCollections, templates, onPreviewTemplate }: {
@@ -2648,6 +2766,10 @@ const ReportGenerationWorkbench = ({
   const eta = status === "generated" ? "已完成" : latestEvent.eta;
   const visibleEvents = events.length > 0 ? events : [REPORT_GENERATION_EVENTS[0]];
   const currentStage = REPORT_GENERATION_STAGES[activeStageIndex] || REPORT_GENERATION_STAGES[0];
+  const visibleDetails = REPORT_GENERATION_DETAILS.filter((detail) => {
+    const detailStageIndex = REPORT_GENERATION_STAGES.findIndex((stage) => stage.id === detail.stageId);
+    return status === "generated" || detailStageIndex <= activeStageIndex;
+  });
 
   const getStageState = (stageId: string, index: number) => {
     if (status === "generated" || index < activeStageIndex) return "done";
@@ -2666,6 +2788,13 @@ const ReportGenerationWorkbench = ({
     if (severity === "中风险") return "bg-amber-50 text-amber-700 border-amber-100";
     if (severity === "待复核") return "bg-purple-50 text-purple-600 border-purple-100";
     return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  };
+
+  const getDetailToneClass = (tone: ReportGenerationDetail["tone"]) => {
+    if (tone === "red") return "border-red-100 bg-red-50 text-red-600";
+    if (tone === "amber") return "border-amber-100 bg-amber-50 text-amber-700";
+    if (tone === "emerald") return "border-emerald-100 bg-emerald-50 text-emerald-700";
+    return "border-blue-100 bg-blue-50 text-blue-700";
   };
 
   const formatRuntime = (index: number) => {
@@ -2696,9 +2825,9 @@ const ReportGenerationWorkbench = ({
                     {status === "generated" ? <CheckCircle2 size={20} /> : <Sparkles size={20} />}
                   </div>
                   <div className="min-w-0">
-                      <h3 className="truncate text-[13px] font-bold text-slate-900">尽调报告生成过程</h3>
+                      <h3 className="truncate text-[13px] font-bold text-slate-900">报告生成过程</h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      展示 AI 处理摘要、证据来源和阶段性发现，便于跟踪与复核。
+                      展示报告智能体处理摘要、证据来源和阶段性发现，便于跟踪与复核。
                     </p>
                   </div>
                 </div>
@@ -2787,7 +2916,7 @@ const ReportGenerationWorkbench = ({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
+            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[240px_minmax(300px,0.8fr)_minmax(400px,1fr)] lg:overflow-hidden xl:grid-cols-[260px_minmax(340px,420px)_minmax(520px,1fr)]">
               <aside className="border-b border-slate-100 bg-white p-5 lg:border-b-0 lg:border-r lg:p-6">
                   <div className="flex items-center gap-2 text-[13px] font-bold text-slate-900">
                   <ClipboardCheck size={16} className="text-blue-600" />
@@ -2808,7 +2937,13 @@ const ReportGenerationWorkbench = ({
                                   : "border-slate-200 bg-slate-50 text-slate-400"
                             }`}
                           >
-                            {state === "done" ? <Check size={14} /> : index + 1}
+                            {state === "done" ? (
+                              <Check size={14} />
+                            ) : state === "active" ? (
+                              <RefreshCw size={13} className="animate-spin" />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-current" />
+                            )}
                           </div>
                           {index < REPORT_GENERATION_STAGES.length - 1 && (
                             <div className={`mt-2 h-8 w-px ${state === "done" ? "bg-emerald-200" : "bg-slate-200"}`} />
@@ -2840,14 +2975,14 @@ const ReportGenerationWorkbench = ({
                 </div>
               </aside>
 
-              <section className="min-h-0 overflow-y-auto p-5 lg:p-6">
+              <section className="min-h-0 overflow-y-auto p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                      <h4 className="text-[13px] font-bold text-slate-900">实时处理摘要</h4>
-                    <p className="mt-1 text-xs text-slate-500">每完成一个处理动作，系统会输出摘要、来源和当前指标。</p>
+                      <h4 className="text-[13px] font-bold text-slate-900">报告智能体处理摘要</h4>
+                    <p className="mt-1 text-xs text-slate-500">每完成一个处理动作，系统会输出摘要、证据来源和当前指标。</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-500">
-                    步骤 {Math.max(currentStepIndex + 1, 1)} / {REPORT_GENERATION_EVENTS.length}
+                    已输出 {Math.max(currentStepIndex + 1, visibleEvents.length)} 条记录
                   </span>
                 </div>
 
@@ -2880,6 +3015,7 @@ const ReportGenerationWorkbench = ({
                         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
                           <span className="inline-flex items-center gap-1.5">
                             <Database size={13} className="text-slate-400" />
+                            <span className="font-bold text-slate-400">证据来源：</span>
                             {event.source}
                           </span>
                           <span>{event.documentCount} 份文档</span>
@@ -2892,40 +3028,102 @@ const ReportGenerationWorkbench = ({
                 </div>
               </section>
 
-              <aside className="border-t border-slate-100 bg-slate-50/70 p-5 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:p-6">
+              <aside className="border-t border-slate-100 bg-slate-50/70 p-5 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 xl:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                      <h4 className="text-[13px] font-bold text-slate-900">阶段性发现</h4>
-                    <p className="mt-1 text-xs text-slate-500">边生成边沉淀风险、缺口和质检结果。</p>
+                      <h4 className="text-[13px] font-bold text-slate-900">问题及明细数据</h4>
+                    <p className="mt-1 text-xs text-slate-500">集中展示需复核问题和关键抽取数据。</p>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 shadow-sm">
-                    {findings.length} 条
+                    {findings.length} 个问题
                   </span>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  {findings.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center">
-                      <Target size={20} className="mx-auto text-slate-300" />
-                      <p className="mt-3 text-xs leading-5 text-slate-500">风险识别阶段开始后，将在这里展示阶段性发现。</p>
-                    </div>
-                  ) : (
-                    findings.map((finding) => (
-                      <div key={finding.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${getSeverityClass(finding.severity)}`}>
-                            {finding.severity}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-400">{finding.status}</span>
+                <div className="mt-5">
+                  <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500">
+                    <AlertCircle size={14} className="text-amber-600" />
+                    <span>问题</span>
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    {findings.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center">
+                        <Target size={20} className="mx-auto text-slate-300" />
+                        <p className="mt-3 text-xs leading-5 text-slate-500">数据抽取阶段开始后，将在这里展示阶段性发现。</p>
+                      </div>
+                    ) : (
+                      findings.map((finding) => (
+                        <div key={finding.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${getSeverityClass(finding.severity)}`}>
+                              {finding.severity}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">{finding.status}</span>
+                          </div>
+                          <h5 className="mt-3 text-sm font-bold text-slate-900">{finding.title}</h5>
+                          <p className="mt-2 text-xs leading-5 text-slate-600">{finding.summary}</p>
+                          <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">
+                            来源：{finding.source}
+                          </div>
                         </div>
-                        <h5 className="mt-3 text-sm font-bold text-slate-900">{finding.title}</h5>
-                        <p className="mt-2 text-xs leading-5 text-slate-600">{finding.summary}</p>
-                        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">
-                          来源：{finding.source}
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500">
+                    <Database size={14} className="text-blue-600" />
+                    <span>明细数据</span>
+                  </div>
+                  <div className="mt-3 space-y-4">
+                    {visibleDetails.map((detail) => (
+                      <div key={detail.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4">
+                          <div className="min-w-0">
+                            <h5 className="text-sm font-black text-slate-900">{detail.title}</h5>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">{detail.description}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold ${getDetailToneClass(detail.tone)}`}>
+                            {detail.statusLabel}
+                          </span>
+                        </div>
+                        {detail.alert && (
+                          <div className="m-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
+                            {detail.alert}
+                          </div>
+                        )}
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[560px] border-collapse text-left text-xs">
+                            <thead className="bg-slate-100 text-slate-800">
+                              <tr>
+                                {detail.columns.map((column) => (
+                                  <th key={column} className="border border-slate-200 px-4 py-3 font-black">
+                                    {column}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="text-slate-800">
+                              {detail.rows.map((row) => (
+                                <tr key={row.id} className="bg-white">
+                                  {row.cells.map((cell, cellIndex) => (
+                                    <td key={`${row.id}-${detail.columns[cellIndex] || cellIndex}`} className="border border-slate-200 px-4 py-3 align-middle">
+                                      <span>{cell}</span>
+                                      {row.conflictCellIndex === cellIndex && (
+                                        <span className="ml-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                          冲突
+                                        </span>
+                                      )}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
-                    ))
-                  )}
+                    ))}
+                  </div>
                 </div>
               </aside>
             </div>
