@@ -955,10 +955,8 @@ export const EditReportView = ({
     return "bg-slate-300";
   };
 
-  const getGeneratedFieldDataSources = (field: typeof aiGeneratedFields[number]): ReportDataSource[] => {
-    const currentValue = manualReportFieldContents[field.id] ?? field.content;
-    const confidence = `${Math.round(field.confidence * 100)}%`;
-    const normalizedSources = field.sourceFiles.map((source): ReportDataSource => {
+  const getNormalizedDataSources = (sources: ReportDataSource[]): ReportDataSource[] =>
+    sources.map((source): ReportDataSource => {
       const dataSource = source as ReportDataSource;
 
       return {
@@ -966,6 +964,11 @@ export const EditReportView = ({
         type: dataSource.type ?? inferDataSourceType(dataSource.name),
       };
     });
+
+  const getGeneratedFieldDataSources = (field: typeof aiGeneratedFields[number]): ReportDataSource[] => {
+    const currentValue = manualReportFieldContents[field.id] ?? field.content;
+    const confidence = `${Math.round(field.confidence * 100)}%`;
+    const normalizedSources = getNormalizedDataSources(field.sourceFiles);
 
     return [
       ...normalizedSources,
@@ -1346,7 +1349,7 @@ export const EditReportView = ({
   };
 
   const openDataSourceDetail = (
-    field: typeof aiGeneratedFields[number],
+    field: { name: string; source: string },
     source: ReportDataSource,
   ) => {
     const sourceType = source.type ?? inferDataSourceType(source.name);
@@ -2338,6 +2341,59 @@ export const EditReportView = ({
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
+                      <Database size={15} className="text-blue-600" />
+                      <h4 className="text-sm font-bold text-slate-900">表格数据来源</h4>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                      {selectedReportBlock.sourceFiles.length} 个来源
+                    </span>
+                  </div>
+
+                  <div className="mb-3 rounded-xl bg-blue-50 p-3">
+                    <p className="text-[10px] font-bold text-blue-500">来源链路</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-700">{selectedReportBlock.dataSource}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {getNormalizedDataSources(selectedReportBlock.sourceFiles).map((source) => {
+                      const sourceType = source.type ?? inferDataSourceType(source.name);
+                      const sourceMeta = getDataSourceTypeMeta(sourceType);
+
+                      return (
+                        <button
+                          key={`${selectedReportBlock.id}-${source.name}-${source.location ?? ""}`}
+                          type="button"
+                          onClick={() => openDataSourceDetail(
+                            {
+                              name: selectedReportBlock.name,
+                              source: selectedReportBlock.dataSource,
+                            },
+                            source,
+                          )}
+                          className={`group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all ${getDataSourceItemClassName(sourceType)}`}
+                          title={source.name}
+                        >
+                          <span className={`absolute left-0 top-0 h-full w-1 ${getDataSourceAccentClassName(sourceType)}`} />
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${sourceMeta.iconClassName}`}>
+                            {renderDataSourceIcon(sourceType)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-bold text-slate-800">{source.name}</span>
+                            <span className={`mt-0.5 block truncate text-[11px] font-medium ${sourceMeta.textClassName}`}>
+                              {sourceMeta.label}{source.location ? ` · ${source.location}` : ""}
+                            </span>
+                            <span className="mt-1 line-clamp-2 block text-[11px] leading-4 text-slate-500">{source.detail}</span>
+                          </span>
+                          <ArrowRight size={13} className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
                       <BookOpen size={15} className="text-blue-600" />
                       <h4 className="text-sm font-bold text-slate-900">规则配置</h4>
                     </div>
@@ -2350,7 +2406,7 @@ export const EditReportView = ({
                   </div>
                   <div className="space-y-2">
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold text-slate-400">数据来源</p>
+                      <p className="text-[10px] font-bold text-slate-400">抽取规则</p>
                       <p className="mt-1 text-xs leading-5 text-slate-700">{selectedReportBlock.extractionRule}</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
