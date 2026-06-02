@@ -262,14 +262,16 @@ export const EditReportView = ({
     currentRule: string;
     dataSource: string;
     businessRule: string;
-  }>({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "" });
+    previewContent: string;
+  }>({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" });
   const [reportBlockRuleModal, setReportBlockRuleModal] = useState<{
     isOpen: boolean;
     blockId: string;
     fieldName: string;
     extractionRule: string;
     businessRule: string;
-  }>({ isOpen: false, blockId: "", fieldName: "", extractionRule: "", businessRule: "" });
+    previewContent: string;
+  }>({ isOpen: false, blockId: "", fieldName: "", extractionRule: "", businessRule: "", previewContent: "" });
   const [selectedGeneratedFieldId, setSelectedGeneratedFieldId] = useState<string | null>(null);
   const [selectedReportBlockId, setSelectedReportBlockId] = useState<string | null>(null);
   const [manualReportFieldContents, setManualReportFieldContents] = useState<Record<string, string>>({});
@@ -855,6 +857,7 @@ export const EditReportView = ({
       currentRule: field.rule,
       dataSource: field.source,
       businessRule: field.status === "conflict" ? "存在多来源口径差异，需人工确认后再写入报告。" : "字段内容可直接写入报告，保持与数据来源一致。",
+      previewContent: "",
     });
   };
 
@@ -865,6 +868,36 @@ export const EditReportView = ({
       fieldName: block.name,
       extractionRule: block.extractionRule,
       businessRule: block.businessRule,
+      previewContent: "",
+    });
+  };
+
+  const generateFieldRulePreview = () => {
+    setFieldRuleModal((previous) => {
+      const sourceLabel = previous.dataSource.trim() || "当前已选资料";
+      const ruleLabel = previous.businessRule.trim() || "保持与数据来源一致";
+      const currentValue =
+        selectedGeneratedField
+          ? manualReportFieldContents[selectedGeneratedField.id] ?? selectedGeneratedField.content
+          : "根据规则生成的字段内容";
+
+      return {
+        ...previous,
+        previewContent: `预览结果：${previous.fieldName} 将从「${sourceLabel}」中抽取，按“${ruleLabel}”处理后生成：${currentValue}`,
+      };
+    });
+  };
+
+  const generateReportBlockRulePreview = () => {
+    setReportBlockRuleModal((previous) => {
+      const extractionRule = previous.extractionRule.trim() || "按当前章节字段规则抽取";
+      const businessRule = previous.businessRule.trim() || "保持章节内容与来源一致";
+      const sourceLabel = reportBlockConfigs[previous.blockId]?.dataSource || "当前章节资料";
+
+      return {
+        ...previous,
+        previewContent: `预览结果：${previous.fieldName} 将基于「${sourceLabel}」，按“${extractionRule}”抽取，并应用“${businessRule}”。生成内容会覆盖本段核心字段、证据来源和风险提示口径。`,
+      };
     });
   };
 
@@ -2710,7 +2743,7 @@ export const EditReportView = ({
                   <p className="mt-1 text-sm text-slate-500">{fieldRuleModal.fieldName}</p>
                 </div>
                 <button
-                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "" })}
+                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" })}
                   className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
                 >
                   <X size={18} />
@@ -2718,6 +2751,15 @@ export const EditReportView = ({
               </div>
 
               <div className="mt-5 space-y-4">
+                {fieldRuleModal.previewContent && (
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-700">
+                      <Sparkles size={14} />
+                      生成数据预览
+                    </div>
+                    <p className="text-sm leading-6 text-slate-700">{fieldRuleModal.previewContent}</p>
+                  </div>
+                )}
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
                   <textarea
@@ -2745,13 +2787,19 @@ export const EditReportView = ({
 
               <div className="mt-6 flex justify-end gap-3">
                 <button
-                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "" })}
+                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" })}
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   取消
                 </button>
                 <button
-                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "" })}
+                  onClick={generateFieldRulePreview}
+                  className="rounded-2xl border border-blue-200 px-4 py-2.5 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
+                >
+                  生成预览
+                </button>
+                <button
+                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" })}
                   className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   保存规则
@@ -2789,6 +2837,7 @@ export const EditReportView = ({
                       fieldName: "",
                       extractionRule: "",
                       businessRule: "",
+                      previewContent: "",
                     })
                   }
                   className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -2798,6 +2847,15 @@ export const EditReportView = ({
               </div>
 
               <div className="mt-5 space-y-4">
+                {reportBlockRuleModal.previewContent && (
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-700">
+                      <Sparkles size={14} />
+                      生成数据预览
+                    </div>
+                    <p className="text-sm leading-6 text-slate-700">{reportBlockRuleModal.previewContent}</p>
+                  </div>
+                )}
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
                   <textarea
@@ -2832,11 +2890,18 @@ export const EditReportView = ({
                       fieldName: "",
                       extractionRule: "",
                       businessRule: "",
+                      previewContent: "",
                     })
                   }
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   取消
+                </button>
+                <button
+                  onClick={generateReportBlockRulePreview}
+                  className="rounded-2xl border border-blue-200 px-4 py-2.5 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
+                >
+                  生成预览
                 </button>
                 <button
                   onClick={() => {
@@ -2850,6 +2915,7 @@ export const EditReportView = ({
                       fieldName: "",
                       extractionRule: "",
                       businessRule: "",
+                      previewContent: "",
                     });
                   }}
                   className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"

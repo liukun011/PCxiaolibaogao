@@ -60,6 +60,10 @@ type NoteDialogState = {
   content: string;
 };
 
+type FileRenameDialogState = {
+  fileId: string;
+};
+
 type UploadMode = 'files' | 'directory';
 
 type UploadOptions = {
@@ -513,6 +517,9 @@ export const DocumentClassificationSection = ({
   const [folderDialogError, setFolderDialogError] = useState('');
   const [noteDialog, setNoteDialog] = useState<NoteDialogState | null>(null);
   const [noteDialogError, setNoteDialogError] = useState('');
+  const [fileRenameDialog, setFileRenameDialog] = useState<FileRenameDialogState | null>(null);
+  const [fileNameInput, setFileNameInput] = useState('');
+  const [fileRenameDialogError, setFileRenameDialogError] = useState('');
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1080,19 +1087,37 @@ export const DocumentClassificationSection = ({
     setSelectedFileId(null);
   };
 
-  const renameFileTitle = (file: KnowledgeDocument) => {
-    const nextTitle = window.prompt('修改资料标题', file.title);
-    if (!nextTitle || !nextTitle.trim()) {
+  const openRenameFileDialog = (file: KnowledgeDocument) => {
+    setFileRenameDialog({ fileId: file.id });
+    setFileNameInput(file.title);
+    setFileRenameDialogError('');
+  };
+
+  const closeRenameFileDialog = () => {
+    setFileRenameDialog(null);
+    setFileNameInput('');
+    setFileRenameDialogError('');
+  };
+
+  const submitRenameFileDialog = () => {
+    if (!fileRenameDialog) {
+      return;
+    }
+
+    const nextTitle = fileNameInput.trim();
+    if (!nextTitle) {
+      setFileRenameDialogError('文件名称不能为空');
       return;
     }
 
     setFiles((previous) =>
       previous.map((currentFile) =>
-        currentFile.id === file.id
-          ? updateKnowledgeDocument(currentFile, { title: nextTitle.trim() })
+        currentFile.id === fileRenameDialog.fileId
+          ? updateKnowledgeDocument(currentFile, { title: nextTitle })
           : currentFile,
       ),
     );
+    closeRenameFileDialog();
   };
 
   const deleteFile = (fileId: string) => {
@@ -1575,9 +1600,10 @@ export const DocumentClassificationSection = ({
                           <button
                             type="button"
                             onClick={() =>
-                              file.sourceKind === 'note' ? editNote(file) : renameFileTitle(file)
+                              file.sourceKind === 'note' ? editNote(file) : openRenameFileDialog(file)
                             }
                             className="rounded p-1 text-gray-400 transition-colors hover:bg-white hover:text-blue-600"
+                            title={file.sourceKind === 'note' ? '编辑笔记' : '修改文件名称'}
                           >
                             <Pencil size={13} />
                           </button>
@@ -1995,6 +2021,65 @@ export const DocumentClassificationSection = ({
                 className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
               >
                 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fileRenameDialog && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">修改文件名称</h3>
+              <button
+                type="button"
+                onClick={closeRenameFileDialog}
+                className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <label className="text-sm font-bold text-gray-700">文件名称</label>
+              <input
+                autoFocus
+                type="text"
+                value={fileNameInput}
+                onChange={(event) => {
+                  setFileNameInput(event.target.value);
+                  if (fileRenameDialogError) {
+                    setFileRenameDialogError('');
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    submitRenameFileDialog();
+                  }
+                }}
+                placeholder="请输入文件名称"
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition-all focus:border-blue-300 focus:bg-white"
+              />
+              {fileRenameDialogError && (
+                <p className="text-xs font-medium text-red-500">{fileRenameDialogError}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeRenameFileDialog}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={submitRenameFileDialog}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+              >
+                保存修改
               </button>
             </div>
           </div>

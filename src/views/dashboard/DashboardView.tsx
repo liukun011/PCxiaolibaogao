@@ -626,15 +626,42 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [dueDiligenceSummaryMetrics, setDueDiligenceSummaryMetrics] = useState<DueDiligenceSummaryMetric[]>(
     intelligenceResult?.dueDiligenceSummaryMetrics || [],
   );
+  const currentReportId = new URLSearchParams(window.location.search).get("reportId");
+  const storedGeneratedReportMeta = (() => {
+    if (!currentReportId) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(window.localStorage.getItem("generatedReports") || "{}")[currentReportId] || null;
+    } catch {
+      return null;
+    }
+  })();
+  const isStoredReportGenerated = (() => {
+    if (!currentReportId) {
+      return false;
+    }
+
+    if (storedGeneratedReportMeta) {
+      return true;
+    }
+
+    try {
+      return JSON.parse(window.localStorage.getItem("generatedReportIds") || "[]").includes(currentReportId);
+    } catch {
+      return false;
+    }
+  })();
   const [reportGenerationStatus, setReportGenerationStatus] = useState<ReportGenerationStatus>(
-    intelligenceResult?.reportGenerated ? "generated" : "idle",
+    intelligenceResult?.reportGenerated || isStoredReportGenerated ? "generated" : "idle",
   );
   const [showReportGenerationPanel, setShowReportGenerationPanel] = useState(false);
   const [reportGenerationEvents, setReportGenerationEvents] = useState<ReportGenerationEvent[]>(
-    intelligenceResult?.reportGenerated ? REPORT_GENERATION_EVENTS : [],
+    intelligenceResult?.reportGenerated || isStoredReportGenerated ? REPORT_GENERATION_EVENTS : [],
   );
   const [reportGenerationStepIndex, setReportGenerationStepIndex] = useState(
-    intelligenceResult?.reportGenerated ? REPORT_GENERATION_EVENTS.length - 1 : -1,
+    intelligenceResult?.reportGenerated || isStoredReportGenerated ? REPORT_GENERATION_EVENTS.length - 1 : -1,
   );
   const [selectedReportTemplateId, setSelectedReportTemplateId] = useState(
     intelligenceResult?.reportTemplateId || templates.find((template) => template.status === "enabled")?.id || templates[0]?.id || "",
@@ -1036,10 +1063,44 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         setReportGenerationStatus("generated");
         setReportGenerationStepIndex(REPORT_GENERATION_EVENTS.length - 1);
         setReportGenerationEvents(REPORT_GENERATION_EVENTS);
+        const reportGeneratedAt = new Date().toLocaleString("zh-CN");
+        if (currentReportId) {
+          try {
+            const generatedReportIds = JSON.parse(window.localStorage.getItem("generatedReportIds") || "[]");
+            const nextGeneratedReportIds = Array.from(new Set([...generatedReportIds, currentReportId]));
+            window.localStorage.setItem("generatedReportIds", JSON.stringify(nextGeneratedReportIds));
+          } catch {
+            window.localStorage.setItem("generatedReportIds", JSON.stringify([currentReportId]));
+          }
+
+          try {
+            const generatedReports = JSON.parse(window.localStorage.getItem("generatedReports") || "{}");
+            window.localStorage.setItem(
+              "generatedReports",
+              JSON.stringify({
+                ...generatedReports,
+                [currentReportId]: {
+                  name: generatedReportName,
+                  generatedAt: reportGeneratedAt,
+                },
+              }),
+            );
+          } catch {
+            window.localStorage.setItem(
+              "generatedReports",
+              JSON.stringify({
+                [currentReportId]: {
+                  name: generatedReportName,
+                  generatedAt: reportGeneratedAt,
+                },
+              }),
+            );
+          }
+        }
         setIntelligenceResult((prev: any) => ({
           ...(prev || {}),
           reportGenerated: true,
-          reportGeneratedAt: new Date().toLocaleString("zh-CN"),
+          reportGeneratedAt,
           reportGenerationAudit: REPORT_GENERATION_EVENTS,
         }));
         return;
@@ -1220,6 +1281,38 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     const findingStageIndex = REPORT_GENERATION_STAGES.findIndex((stage) => stage.id === finding.stageId);
     return reportGenerationStatus === "generated" || findingStageIndex <= currentReportStageIndex;
   });
+  const generatedReportName =
+    storedGeneratedReportMeta?.name ||
+    `${intelligenceResult?.projectName || intelligenceResult?.companyName || "未命名尽调项目"}流贷尽调报告`;
+  const generatedReportTime = intelligenceResult?.reportGeneratedAt || storedGeneratedReportMeta?.generatedAt || "暂未记录";
+  const shouldShowGeneratedReportInfo = reportGenerationStatus === "generated" || Boolean(intelligenceResult?.reportGenerated);
+  const generatedReportInfoBar = shouldShowGeneratedReportInfo ? (
+    <section className="mb-4 flex w-full basis-full flex-wrap items-center justify-between gap-3 self-stretch rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500">
+          <Check size={13} strokeWidth={3} className="text-white" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-bold text-slate-900">{generatedReportName}</h3>
+          <p className="mt-1 text-xs font-medium text-slate-500">生成时间：{generatedReportTime}</p>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-3 text-xs font-bold">
+        <button type="button" onClick={openGeneratedReport} className="text-blue-600 hover:text-blue-700">
+          查看报告
+        </button>
+        <button type="button" onClick={downloadGeneratedReport} className="text-blue-600 hover:text-blue-700">
+          下载报告
+        </button>
+        <button type="button" onClick={startReportGeneration} className="text-blue-600 hover:text-blue-700">
+          重新生成
+        </button>
+        <button type="button" onClick={() => setShowReportGenerationPanel(true)} className="text-blue-600 hover:text-blue-700">
+          查看生成过程
+        </button>
+      </div>
+    </section>
+  ) : null;
 
   return (
     <>
@@ -1641,7 +1734,9 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         {/* Materials Sections */}
         <div ref={questionsSectionRef} className="space-y-5">
           <div className="border-b border-gray-100">
-            <div className="flex items-center gap-8">
+            <div className="flex flex-wrap items-center gap-8">
+              {generatedReportInfoBar}
+
               {[
                 { id: "documents", label: "报告资料" },
                 { id: "questions", label: "访谈问题" },
