@@ -20,7 +20,6 @@ import {
   Pause,
   Download,
   Building,
-  Activity,
   Trash2,
   History,
   FileJson,
@@ -104,6 +103,11 @@ type DueDiligenceSummaryMetric = {
   label: string;
   value: string;
   tone: "blue" | "emerald" | "amber" | "red";
+};
+
+type DueDiligenceAnalysisQuestion = InterviewQuestion & {
+  issue: string;
+  evidence: string;
 };
 
 type ReportGenerationEvent = {
@@ -616,7 +620,6 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [showAIInsightToast, setShowAIInsightToast] = useState(false);
   const [showHeaderEditModal, setShowHeaderEditModal] = useState(false);
   const [showTemplateSwitchModal, setShowTemplateSwitchModal] = useState(false);
-  const [showReportActionMenu, setShowReportActionMenu] = useState(false);
   const [showCompanyDataActionMenu, setShowCompanyDataActionMenu] = useState(false);
   const [showDueDiligenceSummaryPanel, setShowDueDiligenceSummaryPanel] = useState(false);
   const [dueDiligenceSummaryStatus, setDueDiligenceSummaryStatus] = useState<DueDiligenceSummaryStatus>(
@@ -625,6 +628,9 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [dueDiligenceSummary, setDueDiligenceSummary] = useState<string>(intelligenceResult?.dueDiligenceSummary || "");
   const [dueDiligenceSummaryMetrics, setDueDiligenceSummaryMetrics] = useState<DueDiligenceSummaryMetric[]>(
     intelligenceResult?.dueDiligenceSummaryMetrics || [],
+  );
+  const [dueDiligenceAnalysisQuestions, setDueDiligenceAnalysisQuestions] = useState<DueDiligenceAnalysisQuestion[]>(
+    intelligenceResult?.dueDiligenceAnalysisQuestions || [],
   );
   const currentReportId = new URLSearchParams(window.location.search).get("reportId");
   const storedGeneratedReportMeta = (() => {
@@ -671,7 +677,6 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const aiInsightTimersRef = useRef<number[]>([]);
   const dueDiligenceSummaryTimerRef = useRef<number | null>(null);
   const reportGenerationTimerRef = useRef<number | null>(null);
-  const reportActionMenuRef = useRef<HTMLDivElement>(null);
   const companyDataActionMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -685,32 +690,6 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!showReportActionMenu) return;
-
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (reportActionMenuRef.current?.contains(target)) return;
-
-      setShowReportActionMenu(false);
-    };
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowReportActionMenu(false);
-      }
-    };
-
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    document.addEventListener("keydown", closeOnEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutsideClick);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [showReportActionMenu]);
 
   useEffect(() => {
     if (!showCompanyDataActionMenu) return;
@@ -764,7 +743,10 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     if (intelligenceResult?.dueDiligenceSummaryMetrics) {
       setDueDiligenceSummaryMetrics(intelligenceResult.dueDiligenceSummaryMetrics);
     }
-  }, [intelligenceResult?.dueDiligenceSummary, intelligenceResult?.dueDiligenceSummaryMetrics]);
+    if (intelligenceResult?.dueDiligenceAnalysisQuestions) {
+      setDueDiligenceAnalysisQuestions(intelligenceResult.dueDiligenceAnalysisQuestions);
+    }
+  }, [intelligenceResult?.dueDiligenceSummary, intelligenceResult?.dueDiligenceSummaryMetrics, intelligenceResult?.dueDiligenceAnalysisQuestions]);
 
   useEffect(() => {
     if (initialSection !== "questions") return;
@@ -956,6 +938,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     const capital = companyOverviewItems.find((item) => item.label === "注册资本")?.value || "暂无";
     const location = companyOverviewItems.find((item) => item.label === "注册地址")?.value || "暂无";
     const legalPerson = companyOverviewItems.find((item) => item.label === "法定代表人")?.value || "暂无";
+    const establishedAt = companyOverviewItems.find((item) => item.label === "成立日期")?.value || "暂无";
     const riskCount = riskHighlights.length + financialAnomalies.length;
     const questionCount = questions.length + pendingQuestions.length;
     const riskText = riskHighlights.length
@@ -969,32 +952,86 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     const metrics: DueDiligenceSummaryMetric[] = [
       { label: "主体完整度", value: rawCompanyData.name || intelligenceResult?.companyName ? "较完整" : "待补充", tone: rawCompanyData.name || intelligenceResult?.companyName ? "emerald" : "amber" },
       { label: "风险信号", value: `${riskCount} 项`, tone: riskCount >= 3 ? "red" : riskCount > 0 ? "amber" : "emerald" },
-      { label: "访谈追问", value: `${questionCount} 个`, tone: questionCount > 0 ? "blue" : "amber" },
+      { label: "访谈问题", value: `${questionCount} 个`, tone: questionCount > 0 ? "blue" : "amber" },
       { label: "生成时间", value: generatedAt, tone: "blue" },
     ];
 
+    const completenessIssues = [
+      rawCompanyData.name || intelligenceResult?.companyName ? null : "企业名称未形成可核验主体",
+      legalPerson !== "暂无" ? null : "法定代表人字段缺失",
+      capital !== "暂无" ? null : "注册资本字段缺失",
+      location !== "暂无" ? null : "注册地址字段缺失",
+      establishedAt !== "暂无" ? null : "成立日期字段缺失",
+      hasDocumentMaterials ? null : "报告资料尚未上传或未完成分类",
+    ].filter(Boolean);
+    const completenessText = completenessIssues.length
+      ? completenessIssues.map((item, index) => `${index + 1}. ${item}，建议补充营业执照、工商登记信息或授信申请资料。`)
+      : [
+        "1. 企业名称、法定代表人、注册资本、成立日期、注册地址等主体字段已具备初步完整性。",
+        "2. 已有资料能够支撑主体识别、基础经营判断与后续访谈问题生成。",
+      ].join("\n");
+
+    const analysisQuestions: DueDiligenceAnalysisQuestion[] = [
+      {
+        category: "资料完整性",
+        issue: completenessIssues.length ? "主体资料仍有缺口" : "主体资料需现场复核",
+        evidence: completenessIssues.length ? completenessIssues.join("；") : "工商主体字段已汇总，但仍需与原件和授信申请口径交叉验证",
+        question: completenessIssues.length
+          ? `${company} 当前主体资料仍存在缺口，请补充营业执照、工商登记信息、章程或授信申请材料，并说明缺失原因。`
+          : `${company} 的企业名称、法定代表人、注册资本、成立日期和注册地址是否均与营业执照、工商登记和授信申请材料一致？`,
+        source: "资料分析",
+        type: "material",
+      },
+      {
+        category: "工商信息",
+        issue: "工商口径与经营实际需核验",
+        evidence: `行业：${industry}；注册资本：${capital}；注册地址：${location}`,
+        question: `${company} 当前主营业务、实际经营地址和核心股东安排是否与工商登记信息一致，近一年是否发生过尚未披露的变更？`,
+        source: "工商信息分析",
+        type: "material",
+      },
+      {
+        category: "法律诉讼",
+        issue: riskHighlights.length ? "存在外部风险线索" : "外部风险线索需持续核验",
+        evidence: riskText,
+        question: riskHighlights.length
+          ? `${company} 外部检索显示存在 ${riskText}，请逐项说明事项背景、当前状态、涉案金额或处罚金额，以及对经营和授信偿付的影响。`
+          : `${company} 近期是否存在未披露的诉讼、仲裁、行政处罚、欠税、失信或被执行记录？如有，请说明处理进展。`,
+        source: "法律诉讼与风控数据分析",
+        type: "material",
+      },
+      {
+        category: "财务经营",
+        issue: financialAnomalies.length ? "财务或经营数据存在异常" : "财务经营证据需补强",
+        evidence: anomalyText,
+        question: financialAnomalies.length
+          ? `${company} 出现 ${anomalyText}，请说明形成原因、对应客户或订单、回款安排，以及是否需要计提坏账或调整授信条件。`
+          : `${company} 近两期收入、毛利率、应收账款、经营性现金流与在手订单是否匹配？是否存在大额逾期回款或收入确认争议？`,
+        source: "经营与财务数据分析",
+        type: "material",
+      },
+    ];
+
     const summary = [
-      `# ${company} 资料总结`,
+      `# ${company} 资料分析`,
       "",
-      `## 企业画像`,
-      `${company} 当前报告资料显示，企业法定代表人为 ${legalPerson}，注册资本为 ${capital}，所属行业为 ${industry}，注册地址为 ${location}。现有数据已覆盖主体工商、基础经营信息、风险线索与访谈问题，能够支持形成初步尽调判断。`,
+      `## 一、企业资料完整性分析`,
+      `${company} 当前已汇总的主体信息包括：法定代表人 ${legalPerson}、注册资本 ${capital}、成立日期 ${establishedAt}、所属行业 ${industry}、注册地址 ${location}。`,
+      completenessText,
       "",
-      `## 关键发现`,
-      `1. 主体信息方面，企业名称、法定代表人、注册资本、成立日期和注册地址等字段已完成汇总，后续应重点核验工商口径与授信申请资料是否一致。`,
-      `2. 风险信息方面，系统识别到 ${riskText}。该类信号建议进入人工复核清单，并与企业说明、司法材料、税务凭证或抵质押登记记录交叉验证。`,
-      `3. 财务与经营方面，${anomalyText}。若后续生成报告，应优先补充收入确认、应收回款、现金流和大额合同履约证据。`,
+      `## 二、数据分析与洞察`,
+      `1. 工商信息方面，应重点核验主体名称、法定代表人、注册资本、注册地址、实控人和历史变更是否与企业陈述、授信申请资料一致。`,
+      `2. 法律诉讼与外部风险方面，系统识别到 ${riskText}。该类信号建议与企业说明、司法材料、税务凭证、抵质押登记记录交叉验证。`,
+      `3. 财务与经营方面，${anomalyText}。应继续核验收入确认、应收回款、现金流、订单履约和主要客户集中度。`,
       "",
-      `## 风险判断`,
-      `现阶段结论倾向于“可继续推进，但需带条件核验”。若外部风险记录、财务异常或材料缺口无法解释清楚，应在报告中明确列示风险缓释措施、放款前条件和贷后跟踪要求。`,
+      `## 三、待进一步访谈的问题`,
+      ...analysisQuestions.map((item, index) => `${index + 1}. 【${item.category}】${item.question}`),
       "",
-      `## 建议动作`,
-      `1. 复核企业基础信息、股权结构、实际控制人和历史变更，确认与客户经理访谈口径一致。`,
-      `2. 围绕应收账款、回款周期、订单质量、主要客户集中度和现金流匹配关系补充问答。`,
-      `3. 对诉讼、处罚、质押、欠税等风险线索逐条补证，并标注是否已结案、已解除或仍在持续。`,
-      `4. 将本总结中的风险点同步到后续报告生成和尽调结论章节，避免结论与证据链脱节。`,
+      `## 四、访谈使用建议`,
+      `以上问题可直接插入访谈问题清单，并在现场根据企业答复继续补充证据、责任人和整改时间。`,
     ].join("\n");
 
-    return { summary, metrics };
+    return { summary, metrics, analysisQuestions };
   };
 
   const startDueDiligenceSummaryGeneration = () => {
@@ -1003,7 +1040,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
       dueDiligenceSummaryTimerRef.current = null;
     }
 
-    const { summary, metrics } = buildDueDiligenceSummary();
+    const { summary, metrics, analysisQuestions } = buildDueDiligenceSummary();
     const chunks = summary.match(/[\s\S]{1,18}/g) || [summary];
     let chunkIndex = 0;
 
@@ -1011,6 +1048,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     setDueDiligenceSummaryStatus("generating");
     setDueDiligenceSummary("");
     setDueDiligenceSummaryMetrics(metrics);
+    setDueDiligenceAnalysisQuestions(analysisQuestions);
 
     dueDiligenceSummaryTimerRef.current = window.setInterval(() => {
       chunkIndex += 1;
@@ -1027,6 +1065,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
           ...(prev || {}),
           dueDiligenceSummary: summary,
           dueDiligenceSummaryMetrics: metrics,
+          dueDiligenceAnalysisQuestions: analysisQuestions,
           dueDiligenceSummaryGeneratedAt: new Date().toLocaleString("zh-CN"),
         }));
       }
@@ -1041,7 +1080,6 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   };
 
   const startReportGeneration = () => {
-    setShowReportActionMenu(false);
     if (reportGenerationTimerRef.current) {
       window.clearInterval(reportGenerationTimerRef.current);
       reportGenerationTimerRef.current = null;
@@ -1126,12 +1164,10 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   };
 
   const openGeneratedReport = () => {
-    setShowReportActionMenu(false);
     onEdit();
   };
 
   const downloadGeneratedReport = () => {
-    setShowReportActionMenu(false);
     onDownload();
   };
 
@@ -1144,6 +1180,32 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     if (editingIndex === null) return;
     setQuestions(prev => prev.map((q, i) => i === editingIndex ? { ...q, question: editValue } : q));
     setEditingIndex(null);
+  };
+
+  const handleUpdateAnalysisQuestion = (index: number, question: string) => {
+    setDueDiligenceAnalysisQuestions(prev => {
+      const next = prev.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, question } : item
+      ));
+      setIntelligenceResult((current: any) => ({
+        ...(current || {}),
+        dueDiligenceAnalysisQuestions: next,
+      }));
+      return next;
+    });
+  };
+
+  const handleInsertAnalysisQuestions = () => {
+    setQuestions(prev => {
+      const existing = new Set(prev.map(q => q.question));
+      const merged = dueDiligenceAnalysisQuestions
+        .filter((item) => item.question.trim() && !existing.has(item.question))
+        .map(({ issue, evidence, ...question }) => question);
+      return [...merged, ...prev];
+    });
+    setActiveMaterialsTab("questions");
+    setQuestionListMode("default");
+    setShowDueDiligenceSummaryPanel(false);
   };
 
   const handleAddManualQuestion = () => {
@@ -1359,92 +1421,37 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <div
-              ref={reportActionMenuRef}
-              className="relative"
-              onMouseEnter={() => {
-                if (reportGenerationStatus === "generated") {
-                  setShowReportActionMenu(true);
+            <button
+              onClick={() => {
+                if (reportGenerationStatus === "generating") {
+                  setShowReportGenerationPanel(true);
+                  return;
                 }
+                startReportGeneration();
               }}
-              onMouseLeave={() => setShowReportActionMenu(false)}
-              onFocus={() => {
-                if (reportGenerationStatus === "generated") {
-                  setShowReportActionMenu(true);
-                }
-              }}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                reportGenerationStatus === "generating"
+                  ? "border border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100"
+                  : reportGenerationStatus === "generated"
+                    ? "border border-blue-200 bg-white text-blue-600 hover:bg-blue-50"
+                    : "bg-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700"
+              }`}
             >
-              {reportGenerationStatus === "generated" ? (
-                <button
-                  onClick={() => setShowReportActionMenu(true)}
-                  className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
-                >
-                  <FileText size={16} />
-                  <span>报告已生成</span>
-                  <ChevronDown size={14} />
-                </button>
+              {reportGenerationStatus === "generating" ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : reportGenerationStatus === "generated" ? (
+                <RefreshCw size={16} />
               ) : (
-                <button
-                  onClick={() => {
-                    if (reportGenerationStatus === "generating") {
-                      setShowReportGenerationPanel(true);
-                      return;
-                    }
-                    startReportGeneration();
-                  }}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                    reportGenerationStatus === "generating"
-                      ? "border border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100"
-                      : "bg-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700"
-                  }`}
-                >
-                  {reportGenerationStatus === "generating" ? (
-                    <RefreshCw size={16} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={16} />
-                  )}
-                  <span>{reportGenerationStatus === "generating" ? "查看进度" : "生成报告"}</span>
-                </button>
+                <Sparkles size={16} />
               )}
-
-              {reportGenerationStatus === "generated" && showReportActionMenu && (
-                <div className="absolute right-0 top-full z-30 w-48 pt-2">
-                  <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white py-2 shadow-xl">
-                    <button
-                      onClick={() => {
-                        setShowReportActionMenu(false);
-                        setShowReportGenerationPanel(true);
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <Activity size={15} />
-                      <span>查看生成过程</span>
-                    </button>
-                    <button
-                      onClick={openGeneratedReport}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <Eye size={15} />
-                      <span>查看报告</span>
-                    </button>
-                    <button
-                      onClick={startReportGeneration}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <RefreshCw size={15} />
-                      <span>重新生成</span>
-                    </button>
-                    <button
-                      onClick={downloadGeneratedReport}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <Download size={15} />
-                      <span>下载报告</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+              <span>
+                {reportGenerationStatus === "generating"
+                  ? "查看进度"
+                  : reportGenerationStatus === "generated"
+                    ? "重新生成"
+                    : "生成报告"}
+              </span>
+            </button>
             <div
               ref={companyDataActionMenuRef}
               className="relative"
@@ -1529,7 +1536,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               ) : (
                 <Sparkles size={16} />
               )}
-              <span>{dueDiligenceSummaryStatus === "generated" ? "查看资料总结" : "资料总结"}</span>
+              <span>{dueDiligenceSummaryStatus === "generated" ? "查看资料分析" : "资料分析"}</span>
             </button>
             <button
               onClick={() => setShowTemplateSwitchModal(true)}
@@ -1766,6 +1773,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               sectionNumber={1}
               title="报告资料"
               hideHeader
+              hideFileDetails
               onFilesStateChange={setHasDocumentMaterials}
               initialFiles={interviewMaterials}
             />
@@ -2474,9 +2482,13 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
         open={showDueDiligenceSummaryPanel}
         status={dueDiligenceSummaryStatus}
         summary={dueDiligenceSummary}
+        metrics={dueDiligenceSummaryMetrics}
+        analysisQuestions={dueDiligenceAnalysisQuestions}
         companyName={dashboardCompanyName}
         onClose={() => setShowDueDiligenceSummaryPanel(false)}
         onRegenerate={startDueDiligenceSummaryGeneration}
+        onUpdateQuestion={handleUpdateAnalysisQuestion}
+        onInsertQuestions={handleInsertAnalysisQuestions}
       />
 
       <AnimatePresence>
@@ -2720,23 +2732,56 @@ const DueDiligenceSummaryPanel = ({
   open,
   status,
   summary,
+  metrics,
+  analysisQuestions,
   companyName,
   onClose,
   onRegenerate,
+  onUpdateQuestion,
+  onInsertQuestions,
 }: {
   open: boolean;
   status: DueDiligenceSummaryStatus;
   summary: string;
+  metrics: DueDiligenceSummaryMetric[];
+  analysisQuestions: DueDiligenceAnalysisQuestion[];
   companyName: string;
   onClose: () => void;
   onRegenerate: () => void;
+  onUpdateQuestion: (index: number, question: string) => void;
+  onInsertQuestions: () => void;
 }) => {
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [editingQuestionValue, setEditingQuestionValue] = useState("");
+
+  const metricToneClass: Record<DueDiligenceSummaryMetric["tone"], string> = {
+    blue: "border-blue-100 bg-blue-50 text-blue-700",
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    amber: "border-amber-100 bg-amber-50 text-amber-700",
+    red: "border-red-100 bg-red-50 text-red-700",
+  };
+
+  const startQuestionEdit = (index: number, question: string) => {
+    setEditingQuestionIndex(index);
+    setEditingQuestionValue(question);
+  };
+
+  const saveQuestionEdit = () => {
+    if (editingQuestionIndex === null || !editingQuestionValue.trim()) {
+      return;
+    }
+
+    onUpdateQuestion(editingQuestionIndex, editingQuestionValue.trim());
+    setEditingQuestionIndex(null);
+    setEditingQuestionValue("");
+  };
+
   const renderSummary = () => {
     if (!summary) {
       return (
         <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center">
           <Sparkles size={28} className="text-slate-300" />
-          <p className="mt-3 text-sm font-medium text-slate-500">点击重新生成后，将在这里输出资料总结。</p>
+          <p className="mt-3 text-sm font-medium text-slate-500">点击重新分析后，将在这里输出资料分析。</p>
         </div>
       );
     }
@@ -2787,26 +2832,34 @@ const DueDiligenceSummaryPanel = ({
                   {status === "generating" ? <RefreshCw size={20} className="animate-spin" /> : <ClipboardCheck size={20} />}
                 </div>
                 <div className="min-w-0">
-                    <h3 className="truncate text-[13px] font-bold text-slate-900">资料总结</h3>
+                    <h3 className="truncate text-[13px] font-bold text-slate-900">资料分析</h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    {companyName} 的企业数据总结，支持生成后查看与重新生成。
+                    {companyName} 的企业资料完整性、风险分析与问题洞察。
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
+                  onClick={onInsertQuestions}
+                  disabled={status !== "generated" || analysisQuestions.length === 0}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <PlusCircle size={14} />
+                  <span>插入访谈问题清单</span>
+                </button>
+                <button
                   onClick={onRegenerate}
                   disabled={status === "generating"}
                   className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw size={14} className={status === "generating" ? "animate-spin" : ""} />
-                  <span>{status === "generated" ? "重新生成" : "生成中"}</span>
+                  <span>{status === "generated" ? "重新分析" : "生成中"}</span>
                 </button>
                 <button
                   onClick={onClose}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
-                  aria-label="关闭资料总结"
+                  aria-label="关闭资料分析"
                 >
                   <X size={16} />
                 </button>
@@ -2814,8 +2867,108 @@ const DueDiligenceSummaryPanel = ({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                {renderSummary()}
+              <div className="space-y-5">
+                {metrics.length > 0 && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                    {metrics.map((metric) => (
+                      <div key={metric.label} className={`rounded-2xl border px-4 py-3 ${metricToneClass[metric.tone]}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">{metric.label}</p>
+                        <p className="mt-2 text-sm font-black">{metric.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  {renderSummary()}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">现场访谈问题清单</h4>
+                      <p className="mt-1 text-xs text-slate-500">支持行编辑，保存后可一键插入当前访谈问题。</p>
+                    </div>
+                    <button
+                      onClick={onInsertQuestions}
+                      disabled={status !== "generated" || analysisQuestions.length === 0}
+                      className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <PlusCircle size={14} />
+                      <span>一键插入</span>
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-slate-100">
+                    {analysisQuestions.length > 0 ? (
+                      analysisQuestions.map((item, index) => (
+                        <div key={`${item.category}-${index}`} className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                                  {item.category}
+                                </span>
+                                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">
+                                  {item.issue}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-xs leading-5 text-slate-500">{item.evidence}</p>
+                              {editingQuestionIndex === index ? (
+                                <div className="mt-3 flex items-start gap-2">
+                                  <textarea
+                                    autoFocus
+                                    rows={3}
+                                    value={editingQuestionValue}
+                                    onChange={(event) => setEditingQuestionValue(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter" && !event.shiftKey) {
+                                        event.preventDefault();
+                                        saveQuestionEdit();
+                                      }
+                                    }}
+                                    className="min-h-[84px] flex-1 resize-none rounded-xl border border-blue-200 px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                                  />
+                                  <div className="flex shrink-0 flex-col gap-2">
+                                    <button
+                                      onClick={saveQuestionEdit}
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-700"
+                                      title="保存"
+                                    >
+                                      <Check size={15} />
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingQuestionIndex(null)}
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50"
+                                      title="取消"
+                                    >
+                                      <X size={15} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-sm font-medium leading-7 text-slate-800">{item.question}</p>
+                              )}
+                            </div>
+                            {editingQuestionIndex !== index && (
+                              <button
+                                onClick={() => startQuestionEdit(index, item.question)}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                                title="编辑问题"
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-10 text-center text-sm font-medium text-slate-400">
+                        暂未生成访谈问题清单。
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>

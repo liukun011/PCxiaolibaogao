@@ -31,6 +31,7 @@ type DocumentClassificationSectionProps = {
   sectionNumber: number;
   title: string;
   hideHeader?: boolean;
+  hideFileDetails?: boolean;
   onFilesStateChange?: (hasFiles: boolean) => void;
   initialFiles?: Array<{
     name: string;
@@ -493,6 +494,7 @@ export const DocumentClassificationSection = ({
   sectionNumber,
   title,
   hideHeader = false,
+  hideFileDetails = false,
   onFilesStateChange,
   initialFiles = [],
 }: DocumentClassificationSectionProps) => {
@@ -1364,7 +1366,9 @@ export const DocumentClassificationSection = ({
       )}
 
       {hasMaterials ? (
-        <div className={`grid h-[calc(100vh-13.5rem)] min-h-[42rem] grid-cols-1 items-stretch gap-4 xl:grid-cols-[240px_minmax(0,1fr)_320px]`}>
+        <div className={`grid h-[calc(100vh-13.5rem)] min-h-[42rem] grid-cols-1 items-stretch gap-4 ${
+          hideFileDetails ? 'xl:grid-cols-[240px_minmax(0,1fr)]' : 'xl:grid-cols-[240px_minmax(0,1fr)_320px]'
+        }`}>
           <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="h-full space-y-1 overflow-y-auto pr-1">
               {folderTree.map((node) => (
@@ -1643,6 +1647,7 @@ export const DocumentClassificationSection = ({
             </div>
           </div>
 
+          {!hideFileDetails && (
           <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             {selectedFile ? (
             <>
@@ -1782,6 +1787,7 @@ export const DocumentClassificationSection = ({
               </div>
             )}
           </aside>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-10 text-center shadow-sm">
