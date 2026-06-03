@@ -615,6 +615,8 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const [questionListMode, setQuestionListMode] = useState<"default" | "ai">("default");
   const [currentPresetTemplate, setCurrentPresetTemplate] = useState<string>(intelligenceResult?.template || "bank");
   const [showPresetTemplatePanel, setShowPresetTemplatePanel] = useState(false);
+  const [usedQuestionCollectionIds, setUsedQuestionCollectionIds] = useState<string[]>([intelligenceResult?.template || "bank"]);
+  const [selectedQuestionCollectionIds, setSelectedQuestionCollectionIds] = useState<string[]>([]);
   const [isGeneratingAIInsights, setIsGeneratingAIInsights] = useState(false);
   const [aiInsightLogs, setAIInsightLogs] = useState<string[]>([]);
   const [showAIInsightToast, setShowAIInsightToast] = useState(false);
@@ -720,6 +722,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   useEffect(() => {
     if (intelligenceResult?.template) {
       setCurrentPresetTemplate(intelligenceResult.template);
+      setUsedQuestionCollectionIds((previous) => Array.from(new Set([...previous, intelligenceResult.template])));
     }
   }, [intelligenceResult?.template]);
 
@@ -889,20 +892,38 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
     setQuestionListMode(prev => prev === "default" ? "ai" : "default");
   };
 
-  const handleSelectPresetTemplate = (templateId: string) => {
-    if (templateId !== currentPresetTemplate) {
-      const nextTemplateLabel = questionCollections.find((item) => item.id === templateId)?.title || "新的问题";
-      const confirmed = window.confirm(`确认切换到“${nextTemplateLabel}”吗？`);
-      if (!confirmed) return;
-    }
-
-    setQuestionListMode("default");
-    setCurrentPresetTemplate(templateId);
-    setShowPresetTemplatePanel(false);
+  const handleOpenQuestionListSwitch = () => {
+    setSelectedQuestionCollectionIds(usedQuestionCollectionIds);
+    setShowPresetTemplatePanel(true);
   };
 
-  const handleOpenQuestionListSwitch = () => {
-    setShowPresetTemplatePanel(true);
+  const toggleQuestionCollectionSelection = (collectionId: string) => {
+    setSelectedQuestionCollectionIds((previous) =>
+      previous.includes(collectionId)
+        ? previous.filter((id) => id !== collectionId)
+        : [...previous, collectionId],
+    );
+  };
+
+  const handleAddSelectedQuestionCollections = () => {
+    if (selectedQuestionCollectionIds.length === 0) {
+      return;
+    }
+
+    const selectedQuestions = questionCollections
+      .filter((collection) => selectedQuestionCollectionIds.includes(collection.id))
+      .flatMap((collection) => collection.questions || []);
+
+    setQuestions((previous) => {
+      const existing = new Set([...presetQuestions, ...previous].map((question) => question.question));
+      const additions = selectedQuestions.filter((question) => !existing.has(question.question));
+      return [...additions, ...previous];
+    });
+    setUsedQuestionCollectionIds((previous) => Array.from(new Set([...previous, ...selectedQuestionCollectionIds])));
+
+    setQuestionListMode("default");
+    setShowPresetTemplatePanel(false);
+    setSelectedQuestionCollectionIds([]);
   };
 
   const handleDeleteQuestion = (index: number) => {
@@ -1806,7 +1827,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                   onClick={handleOpenQuestionListSwitch}
                   className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
                 >
-                  <span>切换问题</span>
+                  <span>添加问题</span>
                 </button>
                 {questionListMode === "default" && (
                   <button
@@ -2278,7 +2299,10 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 className="relative w-full max-w-lg rounded-[1.75rem] bg-white p-6 shadow-2xl"
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[13px] font-bold text-slate-900">选择问题模板</h3>
+                  <div>
+                    <h3 className="text-[13px] font-bold text-slate-900">添加问题</h3>
+                    <p className="mt-1 text-xs text-slate-500">可选择多套问题清单批量添加到当前访谈问题。</p>
+                  </div>
                   <button
                     onClick={() => setShowPresetTemplatePanel(false)}
                     className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -2290,28 +2314,49 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                 <div className="mt-4 space-y-2">
                   {questionCollections.map((template) => {
                     const templateQuestions = template.questions || [];
-                    const isActive = currentPresetTemplate === template.id;
+                    const isSelected = selectedQuestionCollectionIds.includes(template.id);
 
                     return (
                       <button
                         key={template.id}
-                        onClick={() => handleSelectPresetTemplate(template.id)}
-                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${isActive ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200" : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
+                        onClick={() => toggleQuestionCollectionSelection(template.id)}
+                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${isSelected ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200" : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="text-[13px] font-bold text-slate-900">{template.title}</div>
                           <div className="mt-1 text-xs text-slate-500">{templateQuestions.length} 个预制问题</div>
                         </div>
-                        {isActive ? (
-                          <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white">
-                            当前
+                        {isSelected ? (
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+                            <Check size={14} strokeWidth={3} />
                           </span>
                         ) : (
-                          <ChevronRight size={16} className="text-slate-300" />
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white" />
                         )}
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                  <span className="text-xs font-medium text-slate-500">
+                    已选择 {selectedQuestionCollectionIds.length} 套清单
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowPresetTemplatePanel(false)}
+                      className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleAddSelectedQuestionCollections}
+                      disabled={selectedQuestionCollectionIds.length === 0}
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      添加所选
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </div>

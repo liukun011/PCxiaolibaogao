@@ -114,6 +114,12 @@ type ReportDataSource = {
   location?: string;
 };
 
+type ReportBlockPreviewRow = {
+  label: string;
+  originalValue: string;
+  generatedValue?: string;
+};
+
 export const EditReportView = ({
   onBack,
   onDownload,
@@ -263,7 +269,9 @@ export const EditReportView = ({
     dataSource: string;
     businessRule: string;
     previewContent: string;
-  }>({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" });
+    originalValue: string;
+    generatedValue: string;
+  }>({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "", originalValue: "", generatedValue: "" });
   const [reportBlockRuleModal, setReportBlockRuleModal] = useState<{
     isOpen: boolean;
     blockId: string;
@@ -271,7 +279,8 @@ export const EditReportView = ({
     extractionRule: string;
     businessRule: string;
     previewContent: string;
-  }>({ isOpen: false, blockId: "", fieldName: "", extractionRule: "", businessRule: "", previewContent: "" });
+    previewRows: ReportBlockPreviewRow[];
+  }>({ isOpen: false, blockId: "", fieldName: "", extractionRule: "", businessRule: "", previewContent: "", previewRows: [] });
   const [selectedGeneratedFieldId, setSelectedGeneratedFieldId] = useState<string | null>(null);
   const [selectedReportBlockId, setSelectedReportBlockId] = useState<string | null>(null);
   const [manualReportFieldContents, setManualReportFieldContents] = useState<Record<string, string>>({});
@@ -851,6 +860,7 @@ export const EditReportView = ({
   };
 
   const openFieldRuleModal = (field: typeof aiGeneratedFields[number]) => {
+    const currentValue = manualReportFieldContents[field.id] ?? field.content;
     setFieldRuleModal({
       isOpen: true,
       fieldName: field.name,
@@ -858,7 +868,143 @@ export const EditReportView = ({
       dataSource: field.source,
       businessRule: field.status === "conflict" ? "存在多来源口径差异，需人工确认后再写入报告。" : "字段内容可直接写入报告，保持与数据来源一致。",
       previewContent: "",
+      originalValue: currentValue,
+      generatedValue: "",
     });
+  };
+
+  const getReportBlockPreviewRows = (blockId: string): ReportBlockPreviewRow[] => {
+    const fieldValue = (fieldId: string) => {
+      const field = getGeneratedField(fieldId);
+      return field ? manualReportFieldContents[field.id] ?? field.content : "";
+    };
+
+    const blockPreviewRows: Record<string, ReportBlockPreviewRow[]> = {
+      schemeTable: [
+        { label: "企业名称", originalValue: fieldValue("companyName") },
+        { label: "归属支行", originalValue: fieldValue("branch") },
+        { label: "调查人（双人）", originalValue: fieldValue("investigators") },
+        { label: "行业分类", originalValue: fieldValue("industry") },
+        { label: "申请额度", originalValue: fieldValue("creditAmount") },
+        { label: "贷款用途", originalValue: fieldValue("loanPurpose") },
+        { label: "担保方式", originalValue: fieldValue("guaranteeMethod") },
+      ],
+      applicantTable: [
+        { label: "成立时间", originalValue: fieldValue("establishDate") },
+        { label: "注册资本", originalValue: fieldValue("registeredCapital") },
+        { label: "法定代表人", originalValue: fieldValue("legalRepresentative") },
+        { label: "实际控制人", originalValue: fieldValue("actualController") },
+        { label: "注册地址", originalValue: fieldValue("officeAddress") },
+        { label: "实际经营地址", originalValue: fieldValue("operatingAddress") },
+        { label: "主营业务", originalValue: fieldValue("mainBusiness") },
+      ],
+      creditRiskTable: [
+        { label: "征信情况", originalValue: fieldValue("creditSituation") },
+        { label: "涉诉信息", originalValue: fieldValue("litigation") },
+      ],
+      operationAnalysisTable: [
+        { label: "主营业务", originalValue: fieldValue("mainBusiness") },
+        { label: "营业收入", originalValue: fieldValue("revenue2024") },
+        { label: "净利润", originalValue: fieldValue("netProfit") },
+        { label: "还款来源", originalValue: fieldValue("repaymentPlan") },
+        { label: "抵押物情况", originalValue: fieldValue("collateral") },
+      ],
+      conclusionTable: [
+        { label: "尽调结论", originalValue: fieldValue("conclusion") },
+        { label: "投后关注", originalValue: "放款后按月监测资金用途、主要客户回款及抵押物状态，出现重大异常应及时预警。" },
+      ],
+    };
+
+    return blockPreviewRows[blockId] ?? [];
+  };
+
+  const buildGeneratedBlockPreviewValue = (row: ReportBlockPreviewRow, index: number, extractionRule: string, businessRule: string) => {
+    const normalizedValue = row.originalValue || "待补充";
+    return normalizedValue;
+  };
+
+  const getPreviewRow = (rows: ReportBlockPreviewRow[], label: string) =>
+    rows.find((row) => row.label === label) ?? { label, originalValue: "待补充" };
+
+  const renderPreviewValueCell = (row: ReportBlockPreviewRow, colSpan = 1) => (
+    <td colSpan={colSpan} className="border border-slate-900 px-2 py-2 align-top text-left">
+      <div className="text-xs leading-5 text-slate-700">{row.originalValue || "待补充"}</div>
+      {row.generatedValue && (
+        <div className="mt-2 rounded-md bg-blue-50 px-2 py-1.5 text-xs leading-5 text-blue-800 ring-1 ring-blue-100">
+          <span className="font-bold text-blue-600">新规则生成数据：</span>
+          {row.generatedValue}
+        </div>
+      )}
+    </td>
+  );
+
+  const renderReportBlockPreviewTable = (blockId: string, rows: ReportBlockPreviewRow[]) => {
+    const value = (label: string) => getPreviewRow(rows, label);
+    const labelCell = (label: string, className = "") => (
+      <td className={`border border-slate-900 bg-slate-100 px-2 py-2 text-center text-xs font-medium text-slate-800 ${className}`}>
+        {label}
+      </td>
+    );
+
+    if (blockId === "schemeTable") {
+      return (
+        <table className="w-full table-fixed border-collapse border border-slate-900 text-center text-xs">
+          <tbody>
+            <tr>{labelCell("企业名称", "w-28")}{renderPreviewValueCell(value("企业名称"), 3)}</tr>
+            <tr>{labelCell("归属支行")}{renderPreviewValueCell(value("归属支行"))}{labelCell("调查人（双人）")}{renderPreviewValueCell(value("调查人（双人）"))}</tr>
+            <tr>{labelCell("行业分类")}{renderPreviewValueCell(value("行业分类"))}{labelCell("申请额度")}{renderPreviewValueCell(value("申请额度"))}</tr>
+            <tr>{labelCell("贷款用途")}{renderPreviewValueCell(value("贷款用途"))}{labelCell("担保方式")}{renderPreviewValueCell(value("担保方式"))}</tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    if (blockId === "applicantTable") {
+      return (
+        <table className="w-full table-fixed border-collapse border border-slate-900 text-xs">
+          <tbody>
+            <tr>{labelCell("成立时间", "w-28")}{renderPreviewValueCell(value("成立时间"))}{labelCell("注册资本", "w-28")}{renderPreviewValueCell(value("注册资本"))}</tr>
+            <tr>{labelCell("法定代表人")}{renderPreviewValueCell(value("法定代表人"))}{labelCell("实际控制人")}{renderPreviewValueCell(value("实际控制人"))}</tr>
+            <tr>{labelCell("注册地址")}{renderPreviewValueCell(value("注册地址"), 3)}</tr>
+            <tr>{labelCell("实际经营地址")}{renderPreviewValueCell(value("实际经营地址"), 3)}</tr>
+            <tr>{labelCell("主营业务")}{renderPreviewValueCell(value("主营业务"), 3)}</tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    if (blockId === "creditRiskTable") {
+      return (
+        <table className="w-full table-fixed border-collapse border border-slate-900 text-xs">
+          <tbody>
+            <tr>{labelCell("征信情况", "w-28")}{renderPreviewValueCell(value("征信情况"))}</tr>
+            <tr>{labelCell("涉诉信息")}{renderPreviewValueCell(value("涉诉信息"))}</tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    if (blockId === "operationAnalysisTable") {
+      return (
+        <table className="w-full table-fixed border-collapse border border-slate-900 text-xs">
+          <tbody>
+            <tr>{labelCell("经营能力分析", "w-32")}{renderPreviewValueCell(value("主营业务"))}</tr>
+            <tr>{labelCell("财务表现分析")}{renderPreviewValueCell({ label: "财务表现分析", originalValue: `2024年营业收入为 ${value("营业收入").originalValue}，净利润为 ${value("净利润").originalValue}。`, generatedValue: value("营业收入").generatedValue || value("净利润").generatedValue })}</tr>
+            <tr>{labelCell("担保及还款分析")}{renderPreviewValueCell({ label: "担保及还款分析", originalValue: `还款来源安排为：${value("还款来源").originalValue} 抵押物情况为：${value("抵押物情况").originalValue}`, generatedValue: value("还款来源").generatedValue || value("抵押物情况").generatedValue })}</tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    return (
+      <table className="w-full table-fixed border-collapse border border-slate-900 text-xs">
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>{labelCell(row.label, "w-28")}{renderPreviewValueCell(row)}</tr>
+          ))}
+        </tbody>
+      </table>
+    );
   };
 
   const openReportBlockRuleModal = (block: ReportBlockConfig) => {
@@ -869,6 +1015,7 @@ export const EditReportView = ({
       extractionRule: block.extractionRule,
       businessRule: block.businessRule,
       previewContent: "",
+      previewRows: getReportBlockPreviewRows(block.id),
     });
   };
 
@@ -880,10 +1027,13 @@ export const EditReportView = ({
         selectedGeneratedField
           ? manualReportFieldContents[selectedGeneratedField.id] ?? selectedGeneratedField.content
           : "根据规则生成的字段内容";
+      const generatedValue = `${currentValue}（按新规则补充证据来源与业务口径）`;
 
       return {
         ...previous,
-        previewContent: `预览结果：${previous.fieldName} 将从「${sourceLabel}」中抽取，按“${ruleLabel}”处理后生成：${currentValue}`,
+        previewContent: `原始数据：${currentValue}；新规则生成数据：${generatedValue}`,
+        originalValue: currentValue,
+        generatedValue,
       };
     });
   };
@@ -893,10 +1043,16 @@ export const EditReportView = ({
       const extractionRule = previous.extractionRule.trim() || "按当前章节字段规则抽取";
       const businessRule = previous.businessRule.trim() || "保持章节内容与来源一致";
       const sourceLabel = reportBlockConfigs[previous.blockId]?.dataSource || "当前章节资料";
+      const originalRows = getReportBlockPreviewRows(previous.blockId);
+      const previewRows = originalRows.map((row, index) => ({
+        ...row,
+        generatedValue: buildGeneratedBlockPreviewValue(row, index, extractionRule, businessRule),
+      }));
 
       return {
         ...previous,
         previewContent: `预览结果：${previous.fieldName} 将基于「${sourceLabel}」，按“${extractionRule}”抽取，并应用“${businessRule}”。生成内容会覆盖本段核心字段、证据来源和风险提示口径。`,
+        previewRows,
       };
     });
   };
@@ -2743,7 +2899,7 @@ export const EditReportView = ({
                   <p className="mt-1 text-sm text-slate-500">{fieldRuleModal.fieldName}</p>
                 </div>
                 <button
-                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" })}
+                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "", originalValue: "", generatedValue: "" })}
                   className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
                 >
                   <X size={18} />
@@ -2757,7 +2913,16 @@ export const EditReportView = ({
                       <Sparkles size={14} />
                       生成数据预览
                     </div>
-                    <p className="text-sm leading-6 text-slate-700">{fieldRuleModal.previewContent}</p>
+                    <div className="grid gap-3">
+                      <div className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-6 text-slate-700">
+                        <span className="mr-1 font-bold text-slate-500">原始数据：</span>
+                        {fieldRuleModal.originalValue || "待补充"}
+                      </div>
+                      <div className="rounded-xl bg-blue-50 px-3 py-2 text-sm leading-6 text-blue-800 ring-1 ring-blue-100">
+                        <span className="mr-1 font-bold text-blue-600">新规则生成数据：</span>
+                        {fieldRuleModal.generatedValue || "待生成"}
+                      </div>
+                    </div>
                   </div>
                 )}
                 <label className="block">
@@ -2787,7 +2952,7 @@ export const EditReportView = ({
 
               <div className="mt-6 flex justify-end gap-3">
                 <button
-                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" })}
+                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "", originalValue: "", generatedValue: "" })}
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   取消
@@ -2799,7 +2964,7 @@ export const EditReportView = ({
                   生成预览
                 </button>
                 <button
-                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "" })}
+                  onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "", originalValue: "", generatedValue: "" })}
                   className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   保存规则
@@ -2822,7 +2987,7 @@ export const EditReportView = ({
               initial={{ opacity: 0, y: 16, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl"
+              className="w-full max-w-6xl rounded-3xl bg-white p-6 shadow-2xl"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -2838,6 +3003,7 @@ export const EditReportView = ({
                       extractionRule: "",
                       businessRule: "",
                       previewContent: "",
+                      previewRows: [],
                     })
                   }
                   className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -2846,39 +3012,50 @@ export const EditReportView = ({
                 </button>
               </div>
 
-              <div className="mt-5 space-y-4">
-                {reportBlockRuleModal.previewContent && (
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
-                    <div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-700">
-                      <Sparkles size={14} />
-                      生成数据预览
+              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+                <section className="min-h-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">数据预览</h4>
+                      <p className="mt-1 text-xs text-slate-500">生成预览后可对比原始数据与新规则生成数据。</p>
                     </div>
-                    <p className="text-sm leading-6 text-slate-700">{reportBlockRuleModal.previewContent}</p>
+                    {reportBlockRuleModal.previewContent && (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                        已生成预览
+                      </span>
+                    )}
                   </div>
-                )}
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
-                  <textarea
-                    value={reportBlockRuleModal.extractionRule}
-                    onChange={(event) =>
-                      setReportBlockRuleModal((previous) => ({ ...previous, extractionRule: event.target.value }))
-                    }
-                    className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">业务规则</span>
-                  <textarea
-                    value={reportBlockRuleModal.businessRule}
-                    onChange={(event) =>
-                      setReportBlockRuleModal((previous) => ({ ...previous, businessRule: event.target.value }))
-                    }
-                    className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  />
-                </label>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
-                  保存后会更新这一段的抽取规则和业务规则，后续生成将按新的规则执行。
-                </div>
+
+                  <div className="max-h-[440px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
+                    {renderReportBlockPreviewTable(reportBlockRuleModal.blockId, reportBlockRuleModal.previewRows)}
+                  </div>
+                </section>
+
+                <section className="space-y-4">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
+                    <textarea
+                      value={reportBlockRuleModal.extractionRule}
+                      onChange={(event) =>
+                        setReportBlockRuleModal((previous) => ({ ...previous, extractionRule: event.target.value }))
+                      }
+                      className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700">业务规则</span>
+                    <textarea
+                      value={reportBlockRuleModal.businessRule}
+                      onChange={(event) =>
+                        setReportBlockRuleModal((previous) => ({ ...previous, businessRule: event.target.value }))
+                      }
+                      className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                  </label>
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
+                    保存后会更新这一段的抽取规则和业务规则，后续生成将按新的规则执行。
+                  </div>
+                </section>
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
@@ -2891,6 +3068,7 @@ export const EditReportView = ({
                       extractionRule: "",
                       businessRule: "",
                       previewContent: "",
+                      previewRows: [],
                     })
                   }
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
@@ -2916,6 +3094,7 @@ export const EditReportView = ({
                       extractionRule: "",
                       businessRule: "",
                       previewContent: "",
+                      previewRows: [],
                     });
                   }}
                   className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
