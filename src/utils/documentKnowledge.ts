@@ -368,12 +368,15 @@ export const filterDocuments = (
   documents: KnowledgeDocument[],
   keyword: string,
   directoryPath: string,
+  selectedTag = 'ALL',
 ) => {
   const normalizedKeyword = keyword.trim().toLowerCase();
 
   return documents.filter((document) => {
     const matchesDirectory =
       directoryPath === 'ALL' || document.directoryPath.startsWith(directoryPath);
+
+    const matchesTag = selectedTag === 'ALL' || document.tags.includes(selectedTag);
 
     const matchesKeyword =
       !normalizedKeyword ||
@@ -389,7 +392,7 @@ export const filterDocuments = (
         .toLowerCase()
         .includes(normalizedKeyword);
 
-    return matchesDirectory && matchesKeyword;
+    return matchesDirectory && matchesTag && matchesKeyword;
   });
 };
 

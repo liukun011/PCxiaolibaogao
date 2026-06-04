@@ -512,6 +512,7 @@ export const DocumentClassificationSection = ({
   const [isReparsingFailedFiles, setIsReparsingFailedFiles] = useState(false);
   const [showParseFailuresPopover, setShowParseFailuresPopover] = useState(false);
   const [addingTagId, setAddingTagId] = useState<string | null>(null);
+  const [editingTag, setEditingTag] = useState<{ fileId: string; tag: string } | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [visibleFileLimit, setVisibleFileLimit] = useState(FILES_PAGE_SIZE);
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
@@ -1292,6 +1293,42 @@ export const DocumentClassificationSection = ({
     setTagInput('');
   };
 
+  const startAddingTag = (fileId: string) => {
+    setAddingTagId(fileId);
+    setEditingTag(null);
+    setTagInput('');
+  };
+
+  const startEditingTag = (fileId: string, tag: string) => {
+    setEditingTag({ fileId, tag });
+    setAddingTagId(null);
+    setTagInput(tag);
+  };
+
+  const submitEditedTag = (fileId: string, originalTag: string) => {
+    const nextTag = tagInput.trim();
+    if (!nextTag || nextTag === originalTag) {
+      setEditingTag(null);
+      setTagInput('');
+      return;
+    }
+
+    setFiles((previous) =>
+      previous.map((file) =>
+        file.id === fileId
+          ? {
+              ...file,
+              tags: Array.from(
+                new Set(file.tags.map((tag) => (tag === originalTag ? nextTag : tag))),
+              ),
+            }
+          : file,
+      ),
+    );
+    setEditingTag(null);
+    setTagInput('');
+  };
+
   const removeTag = (fileId: string, tagToRemove: string) => {
     setFiles((previous) =>
       previous.map((file) =>
@@ -1557,8 +1594,9 @@ export const DocumentClassificationSection = ({
 
               {currentFiles.length > 0 ? (
                 <div className="px-3 py-2">
-                  <div className="grid grid-cols-[minmax(0,1.8fr)_150px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
                     <span>名称</span>
+                    <span>标签</span>
                     <span>上传时间</span>
                     <span className="text-right">操作</span>
                   </div>
@@ -1569,7 +1607,7 @@ export const DocumentClassificationSection = ({
                     return (
                       <div
                         key={file.id}
-                        className={`grid grid-cols-[minmax(0,1.8fr)_150px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
+                        className={`grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
                           isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                         }`}
                       >
@@ -1591,6 +1629,89 @@ export const DocumentClassificationSection = ({
                             <div className="truncate text-[11px] text-gray-400">{file.name}</div>
                           </div>
                         </button>
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                          {file.tags.slice(0, 3).map((tag) => (
+                            editingTag?.fileId === file.id && editingTag.tag === tag ? (
+                              <input
+                                key={tag}
+                                autoFocus
+                                type="text"
+                                value={tagInput}
+                                onChange={(event) => setTagInput(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    submitEditedTag(file.id, tag);
+                                  } else if (event.key === 'Escape') {
+                                    setEditingTag(null);
+                                    setTagInput('');
+                                  }
+                                }}
+                                onBlur={() => submitEditedTag(file.id, tag)}
+                                className="w-20 rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-700 outline-none ring-blue-400 focus:ring-1"
+                              />
+                            ) : (
+                              <span
+                                key={tag}
+                                className={`group/tag flex max-w-full items-center gap-1 rounded border py-0.5 pl-1.5 pr-1 text-[10px] font-bold ${
+                                  tag.includes('风险')
+                                    ? 'border-red-100 bg-red-50 text-red-600'
+                                    : 'border-blue-100 bg-blue-50 text-blue-600'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingTag(file.id, tag)}
+                                  className="truncate"
+                                  title="编辑标签"
+                                >
+                                  {tag}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeTag(file.id, tag)}
+                                  className="shrink-0 rounded-full p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover/tag:opacity-100"
+                                  title="删除标签"
+                                >
+                                  <X size={8} />
+                                </button>
+                              </span>
+                            )
+                          ))}
+                          {file.tags.length > 3 && (
+                            <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-bold text-gray-400">
+                              +{file.tags.length - 3}
+                            </span>
+                          )}
+                          {addingTagId === file.id ? (
+                            <input
+                              autoFocus
+                              type="text"
+                              value={tagInput}
+                              onChange={(event) => setTagInput(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  submitTag(file.id);
+                                } else if (event.key === 'Escape') {
+                                  setAddingTagId(null);
+                                  setTagInput('');
+                                }
+                              }}
+                              onBlur={() => submitTag(file.id)}
+                              placeholder="标签"
+                              className="w-20 rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-700 outline-none ring-blue-400 focus:ring-1"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startAddingTag(file.id)}
+                              className="flex items-center gap-0.5 rounded border border-dashed border-blue-200 px-1.5 py-0.5 text-[10px] font-bold text-blue-600 transition-colors hover:bg-blue-50"
+                              title="加标签"
+                            >
+                              <Plus size={10} />
+                              标签
+                            </button>
+                          )}
+                        </div>
                         <span className="text-xs text-gray-500">{file.updatedAtLabel}</span>
                         <div className="flex items-center justify-end gap-1">
                           <button
@@ -1727,23 +1848,51 @@ export const DocumentClassificationSection = ({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {selectedFile.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className={`group/tag flex items-center gap-1 rounded border py-1 pl-2 pr-1 text-[10px] font-bold ${
-                          tag.includes('风险')
-                            ? 'border-red-100 bg-red-50 text-red-600'
-                            : 'border-blue-100 bg-blue-50 text-blue-600'
-                        }`}
-                      >
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => removeTag(selectedFile.id, tag)}
-                          className="rounded-full p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover/tag:opacity-100"
+                      editingTag?.fileId === selectedFile.id && editingTag.tag === tag ? (
+                        <input
+                          key={tag}
+                          autoFocus
+                          type="text"
+                          value={tagInput}
+                          onChange={(event) => setTagInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              submitEditedTag(selectedFile.id, tag);
+                            } else if (event.key === 'Escape') {
+                              setEditingTag(null);
+                              setTagInput('');
+                            }
+                          }}
+                          onBlur={() => submitEditedTag(selectedFile.id, tag)}
+                          className="w-24 rounded border border-blue-200 bg-white px-2 py-1 text-[10px] text-gray-700 outline-none ring-blue-400 focus:ring-1"
+                        />
+                      ) : (
+                        <span
+                          key={tag}
+                          className={`group/tag flex items-center gap-1 rounded border py-1 pl-2 pr-1 text-[10px] font-bold ${
+                            tag.includes('风险')
+                              ? 'border-red-100 bg-red-50 text-red-600'
+                              : 'border-blue-100 bg-blue-50 text-blue-600'
+                          }`}
                         >
-                          <X size={8} />
-                        </button>
-                      </span>
+                          <button
+                            type="button"
+                            onClick={() => startEditingTag(selectedFile.id, tag)}
+                            className="max-w-28 truncate"
+                            title="编辑标签"
+                          >
+                            {tag}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeTag(selectedFile.id, tag)}
+                            className="rounded-full p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover/tag:opacity-100"
+                            title="删除标签"
+                          >
+                            <X size={8} />
+                          </button>
+                        </span>
+                      )
                     ))}
 
                     {addingTagId === selectedFile.id ? (
@@ -1767,7 +1916,7 @@ export const DocumentClassificationSection = ({
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setAddingTagId(selectedFile.id)}
+                        onClick={() => startAddingTag(selectedFile.id)}
                         className="flex items-center gap-0.5 rounded border border-dashed border-blue-200 px-2 py-1 text-[10px] font-bold text-blue-600 transition-colors hover:bg-blue-50"
                       >
                         <Plus size={10} />

@@ -5,10 +5,12 @@ import {
   ChevronRight,
   FileText,
   FolderTree,
+  Plus,
   Search,
   Sparkles,
   Tag,
   Upload,
+  X,
 } from 'lucide-react';
 import {
   buildFolderTree,
@@ -88,8 +90,12 @@ export const DocumentManagerView = () => {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('ALL');
+  const [selectedTag, setSelectedTag] = useState('ALL');
   const [keyword, setKeyword] = useState('');
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [addingTagDocumentId, setAddingTagDocumentId] = useState<string | null>(null);
+  const [editingTag, setEditingTag] = useState<{ documentId: string; tag: string } | null>(null);
+  const [tagInput, setTagInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTimerRef = useRef<number | null>(null);
 
@@ -117,7 +123,11 @@ export const DocumentManagerView = () => {
       const parsedDocuments = generateKnowledgeDocuments(selectedFiles);
       setDocuments(parsedDocuments);
       setSelectedFolder('ALL');
+      setSelectedTag('ALL');
       setCollapsedFolders(new Set());
+      setAddingTagDocumentId(null);
+      setEditingTag(null);
+      setTagInput('');
       setIsUploading(false);
       uploadTimerRef.current = null;
       event.target.value = '';
@@ -126,9 +136,13 @@ export const DocumentManagerView = () => {
 
   const folderTree = useMemo(() => buildFolderTree(documents), [documents]);
   const stats = useMemo(() => getKnowledgeStats(documents), [documents]);
+  const allTags = useMemo(
+    () => Array.from(new Set(documents.flatMap((document) => document.tags))).sort((left, right) => left.localeCompare(right, 'zh-CN')),
+    [documents],
+  );
   const filteredDocuments = useMemo(
-    () => filterDocuments(documents, keyword, selectedFolder),
-    [documents, keyword, selectedFolder],
+    () => filterDocuments(documents, keyword, selectedFolder, selectedTag),
+    [documents, keyword, selectedFolder, selectedTag],
   );
   const groupedDocuments = useMemo(
     () => groupDocumentsByDirectory(filteredDocuments),
@@ -145,6 +159,81 @@ export const DocumentManagerView = () => {
       }
       return next;
     });
+  };
+
+  const startAddingTag = (documentId: string) => {
+    setAddingTagDocumentId(documentId);
+    setEditingTag(null);
+    setTagInput('');
+  };
+
+  const startEditingTag = (documentId: string, tag: string) => {
+    setEditingTag({ documentId, tag });
+    setAddingTagDocumentId(null);
+    setTagInput(tag);
+  };
+
+  const submitTag = (documentId: string) => {
+    const nextTag = tagInput.trim();
+    if (!nextTag) {
+      setAddingTagDocumentId(null);
+      setTagInput('');
+      return;
+    }
+
+    setDocuments((previous) =>
+      previous.map((document) =>
+        document.id === documentId && !document.tags.includes(nextTag)
+          ? { ...document, tags: [...document.tags, nextTag] }
+          : document,
+      ),
+    );
+    setSelectedTag(nextTag);
+    setAddingTagDocumentId(null);
+    setTagInput('');
+  };
+
+  const submitEditedTag = (documentId: string, originalTag: string) => {
+    const nextTag = tagInput.trim();
+    if (!nextTag || nextTag === originalTag) {
+      setEditingTag(null);
+      setTagInput('');
+      return;
+    }
+
+    setDocuments((previous) =>
+      previous.map((document) =>
+        document.id === documentId
+          ? {
+              ...document,
+              tags: Array.from(
+                new Set(document.tags.map((tag) => (tag === originalTag ? nextTag : tag))),
+              ),
+            }
+          : document,
+      ),
+    );
+
+    if (selectedTag === originalTag) {
+      setSelectedTag(nextTag);
+    }
+
+    setEditingTag(null);
+    setTagInput('');
+  };
+
+  const removeTag = (documentId: string, tagToRemove: string) => {
+    setDocuments((previous) =>
+      previous.map((document) =>
+        document.id === documentId
+          ? { ...document, tags: document.tags.filter((tag) => tag !== tagToRemove) }
+          : document,
+      ),
+    );
+
+    if (selectedTag === tagToRemove) {
+      setSelectedTag('ALL');
+    }
   };
 
   return (
@@ -271,6 +360,40 @@ export const DocumentManagerView = () => {
               ))}
               </div>
             </div>
+
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-3">
+              <div className="mb-3 flex items-center gap-2 text-xs font-bold text-gray-500">
+                <Tag size={14} className="text-blue-500" />
+                标签筛选
+              </div>
+              <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTag('ALL')}
+                  className={`rounded-md border px-2 py-1 text-[10px] font-bold transition-colors ${
+                    selectedTag === 'ALL'
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-white'
+                  }`}
+                >
+                  全部标签
+                </button>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setSelectedTag(tag)}
+                    className={`rounded-md border px-2 py-1 text-[10px] font-bold transition-colors ${
+                      selectedTag === tag
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-white'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
           </aside>
 
           <main className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -360,17 +483,80 @@ export const DocumentManagerView = () => {
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {document.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className={`rounded-md border px-2 py-1 text-[10px] font-bold ${
-                                  tag.includes('风险')
-                                    ? 'border-red-100 bg-red-50 text-red-600'
-                                    : 'border-blue-100 bg-blue-50 text-blue-600'
-                                }`}
-                              >
-                                {tag}
-                              </span>
+                              editingTag?.documentId === document.id && editingTag.tag === tag ? (
+                                <input
+                                  key={tag}
+                                  autoFocus
+                                  type="text"
+                                  value={tagInput}
+                                  onChange={(event) => setTagInput(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      submitEditedTag(document.id, tag);
+                                    } else if (event.key === 'Escape') {
+                                      setEditingTag(null);
+                                      setTagInput('');
+                                    }
+                                  }}
+                                  onBlur={() => submitEditedTag(document.id, tag)}
+                                  className="w-24 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] text-gray-700 outline-none ring-blue-300 focus:ring-1"
+                                />
+                              ) : (
+                                <span
+                                  key={tag}
+                                  className={`group/tag flex items-center gap-1 rounded-md border py-1 pl-2 pr-1 text-[10px] font-bold ${
+                                    tag.includes('风险')
+                                      ? 'border-red-100 bg-red-50 text-red-600'
+                                      : 'border-blue-100 bg-blue-50 text-blue-600'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingTag(document.id, tag)}
+                                    className="max-w-28 truncate"
+                                    title="编辑标签"
+                                  >
+                                    {tag}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTag(document.id, tag)}
+                                    className="rounded-full p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover/tag:opacity-100"
+                                    title="删除标签"
+                                  >
+                                    <X size={8} />
+                                  </button>
+                                </span>
+                              )
                             ))}
+                            {addingTagDocumentId === document.id ? (
+                              <input
+                                autoFocus
+                                type="text"
+                                value={tagInput}
+                                onChange={(event) => setTagInput(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    submitTag(document.id);
+                                  } else if (event.key === 'Escape') {
+                                    setAddingTagDocumentId(null);
+                                    setTagInput('');
+                                  }
+                                }}
+                                onBlur={() => submitTag(document.id)}
+                                placeholder="回车确认"
+                                className="w-24 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] text-gray-700 outline-none ring-blue-300 focus:ring-1"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => startAddingTag(document.id)}
+                                className="flex items-center gap-0.5 rounded-md border border-dashed border-blue-200 px-2 py-1 text-[10px] font-bold text-blue-600 transition-colors hover:bg-blue-50"
+                              >
+                                <Plus size={10} />
+                                加标签
+                              </button>
+                            )}
                           </div>
                         </div>
                       </article>
