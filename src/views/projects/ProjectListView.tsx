@@ -274,7 +274,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 ml-1">
-                          尽调项目名称 *
+                          名称 <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -312,7 +312,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700 ml-1">请选择初始报告模板</label>
+                      <label className="text-sm font-bold text-gray-700 ml-1">请选择报告模板</label>
                       <div className="relative">
                         <select
                           value={selectedTemplate}

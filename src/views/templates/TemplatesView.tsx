@@ -8,7 +8,6 @@ import {
   ClipboardCheck,
   Settings,
   MessageSquare,
-  HelpCircle,
   ChevronRight,
   ChevronDown,
   Search,
@@ -165,6 +164,62 @@ export const TemplatesView = ({
       file: null,
     });
     setUploadModalError("");
+  };
+
+  const handleDownloadTemplateExample = () => {
+    const exampleContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>最佳实践模板示例</title>
+  <style>
+    body { font-family: "Microsoft YaHei", Arial, sans-serif; line-height: 1.7; color: #111827; }
+    h1 { font-size: 22px; text-align: center; }
+    h2 { font-size: 16px; margin-top: 24px; }
+    .comment { color: #2563eb; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    td, th { border: 1px solid #d1d5db; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>授信调查报告模板示例</h1>
+  <p class="comment">批注建议：可在章节标题、字段占位符、数据来源处添加批注，说明生成规则和取数口径。</p>
+
+  <h2>一、企业基本情况</h2>
+  <p>企业名称：{{企业名称}}</p>
+  <p>统一社会信用代码：{{统一社会信用代码}}</p>
+  <p>注册地址：{{注册地址}}</p>
+
+  <h2>二、经营情况分析</h2>
+  <p>{{经营情况分析}}</p>
+
+  <h2>三、财务情况</h2>
+  <table>
+    <thead>
+      <tr><th>指标</th><th>本期</th><th>上期</th><th>变化说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>营业收入</td><td>{{营业收入_本期}}</td><td>{{营业收入_上期}}</td><td>{{营业收入_变化说明}}</td></tr>
+      <tr><td>净利润</td><td>{{净利润_本期}}</td><td>{{净利润_上期}}</td><td>{{净利润_变化说明}}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>四、风险提示</h2>
+  <p>{{风险提示}}</p>
+
+  <h2>五、尽调结论</h2>
+  <p>{{尽调结论}}</p>
+</body>
+</html>`;
+    const blob = new Blob(["\ufeff", exampleContent], { type: "application/msword;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "最佳实践模板示例.doc";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -594,8 +649,7 @@ export const TemplatesView = ({
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">上传模板</h3>
-                  <p className="mt-1 text-sm text-gray-500">补充基础信息后，上传本机模板文件生成模板。</p>
+                  <h3 className="text-base font-bold text-gray-900">上传模板</h3>
                 </div>
                 <button
                   onClick={closeUploadModal}
@@ -679,9 +733,21 @@ export const TemplatesView = ({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                    模板文件 <span className="text-red-500">*</span>
-                  </label>
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <label className="flex items-center gap-1.5 text-sm font-bold text-gray-700">
+                      <span>
+                        模板文件 <span className="text-red-500">*</span>
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleDownloadTemplateExample}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-50"
+                    >
+                      <Download size={13} />
+                      <span>下载模板文件示例</span>
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
