@@ -120,6 +120,157 @@ type ReportBlockPreviewRow = {
   generatedValue?: string;
 };
 
+const REPORT_RULE_DATA_SOURCE_TREE = [
+  {
+    group: "业务申请材料",
+    children: ["授信申请书", "客户归属关系表", "采购合同", "授信方案", "抵押方案"],
+  },
+  {
+    group: "企业基础资料",
+    children: ["营业执照", "工商登记信息", "股东名册", "官方网站", "现场走访材料"],
+  },
+  {
+    group: "风险核查资料",
+    children: ["企业征信报告", "实控人个人征信", "法院执行网", "企查查", "法务访谈", "司法风险检索报告"],
+  },
+  {
+    group: "经营财务资料",
+    children: ["销售合同汇总", "财务报表", "销售台账", "财务测算表"],
+  },
+  {
+    group: "访谈与过程资料",
+    children: ["管理层访谈", "会议纪要", "访谈记录", "录音转写"],
+  },
+  {
+    group: "规则与清单",
+    children: ["风控核查清单", "贷审规则", "征信及司法检索结果"],
+  },
+];
+
+const parseRuleDataSources = (value: string) =>
+  value
+    .split("/")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const formatRuleDataSources = (items: string[]) => items.join(" / ");
+
+const RuleDataSourceTreeSelect = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (nextValue: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selectedItems = parseRuleDataSources(value);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  const toggleDataSource = (option: string) => {
+    const nextItems = selectedItems.includes(option)
+      ? selectedItems.filter((item) => item !== option)
+      : [...selectedItems, option];
+    onChange(formatRuleDataSources(nextItems));
+  };
+
+  const toggleDataSourceGroup = (children: string[]) => {
+    const selectedSet = new Set(selectedItems);
+    const allSelected = children.every((item) => selectedSet.has(item));
+
+    if (allSelected) {
+      children.forEach((item) => selectedSet.delete(item));
+    } else {
+      children.forEach((item) => selectedSet.add(item));
+    }
+
+    onChange(formatRuleDataSources(Array.from(selectedSet)));
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        className={`flex min-h-[46px] w-full items-center justify-between gap-3 rounded-2xl border bg-white px-4 py-2 text-left text-sm text-slate-900 outline-none transition ${
+          open ? "border-blue-300 ring-4 ring-blue-100" : "border-slate-200 hover:border-blue-200"
+        }`}
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {selectedItems.length ? (
+            selectedItems.map((item) => (
+              <span key={item} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                {item}
+              </span>
+            ))
+          ) : (
+            <span className="text-slate-400">请选择数据来源</span>
+          )}
+        </div>
+        <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+          {REPORT_RULE_DATA_SOURCE_TREE.map((group) => {
+            const allSelected = group.children.every((item) => selectedItems.includes(item));
+            const partialSelected = group.children.some((item) => selectedItems.includes(item));
+
+            return (
+              <div key={group.group} className="rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => toggleDataSourceGroup(group.children)}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                    partialSelected ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>{group.group}</span>
+                  {allSelected ? (
+                    <Check size={15} />
+                  ) : partialSelected ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  ) : null}
+                </button>
+                <div className="ml-3 border-l border-slate-100 py-1 pl-3">
+                  {group.children.map((option) => {
+                    const checked = selectedItems.includes(option);
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => toggleDataSource(option)}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm transition-colors ${
+                          checked ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                        }`}
+                      >
+                        <span>{option}</span>
+                        {checked && <Check size={14} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const EditReportView = ({
   onBack,
   onDownload,
@@ -276,13 +427,15 @@ export const EditReportView = ({
     isOpen: boolean;
     blockId: string;
     fieldName: string;
+    dataSource: string;
     extractionRule: string;
     businessRule: string;
     previewContent: string;
     previewRows: ReportBlockPreviewRow[];
-  }>({ isOpen: false, blockId: "", fieldName: "", extractionRule: "", businessRule: "", previewContent: "", previewRows: [] });
+  }>({ isOpen: false, blockId: "", fieldName: "", dataSource: "", extractionRule: "", businessRule: "", previewContent: "", previewRows: [] });
   const [selectedGeneratedFieldId, setSelectedGeneratedFieldId] = useState<string | null>(null);
   const [selectedReportBlockId, setSelectedReportBlockId] = useState<string | null>(null);
+  const [selectedRulePreviewFieldId, setSelectedRulePreviewFieldId] = useState<string | null>(null);
   const [manualReportFieldContents, setManualReportFieldContents] = useState<Record<string, string>>({});
   const [reportBlockConfigs, setReportBlockConfigs] = useState<Record<string, ReportBlockConfig>>(() => ({
     schemeTable: {
@@ -823,6 +976,82 @@ export const EditReportView = ({
   ];
   const conflictGeneratedFields = aiGeneratedFields.filter((field) => field.status === "conflict");
   const successGeneratedCount = aiGeneratedFields.length - conflictGeneratedFields.length;
+  const newRulePreviewItems = aiGeneratedFields.slice(0, 5).map((field, index) => {
+    const currentValue = manualReportFieldContents[field.id] ?? field.content;
+    const status = index === 0 ? "generating" : index === 3 ? "failed" : "generated";
+    const generatedValue =
+      status === "failed"
+        ? ""
+        : field.status === "conflict"
+          ? `${field.content}（按新规则保留冲突提示，需人工确认来源口径）`
+          : `${field.content}（按新规则补充来源依据）`;
+
+    return {
+      field,
+      currentValue,
+      generatedValue,
+      status,
+    };
+  });
+  const selectedRulePreviewItem =
+    newRulePreviewItems.find((item) => item.field.id === selectedRulePreviewFieldId) ?? null;
+
+  const getRulePreviewStatusMeta = (status: string) => {
+    if (status === "generating") {
+      return {
+        label: "生成中",
+        className: "bg-blue-50 text-blue-600",
+        dotClassName: "bg-blue-500",
+      };
+    }
+    if (status === "failed") {
+      return {
+        label: "生成失败",
+        className: "bg-red-50 text-red-600",
+        dotClassName: "bg-red-500",
+      };
+    }
+    return {
+      label: "已生成",
+      className: "bg-emerald-50 text-emerald-600",
+      dotClassName: "bg-emerald-500",
+    };
+  };
+
+  const applyRulePreviewToReport = () => {
+    if (!selectedRulePreviewItem || selectedRulePreviewItem.status !== "generated") return;
+
+    const schemeFieldMap: Record<string, string> = {
+      企业名称: "companyName",
+      归属支行: "branch",
+      "调查人（双人）": "investigators",
+      行业分类: "industry",
+      申请额度: "creditAmount",
+      贷款用途: "loanPurpose",
+      担保方式: "guaranteeMethod",
+    };
+
+    setManualReportFieldContents((previous) => {
+      const next = { ...previous };
+      schemeGeneratedPreviewRows.forEach((row) => {
+        const fieldId = schemeFieldMap[row.label];
+        if (fieldId && row.generatedValue) {
+          next[fieldId] = row.generatedValue;
+        }
+      });
+      return next;
+    });
+    setSelectedGeneratedFieldId(null);
+    setSelectedReportBlockId("schemeTable");
+    setSelectedRulePreviewFieldId(null);
+    setActiveEditTargetId("report-block-schemeTable");
+    window.setTimeout(() => {
+      editTargetRefs.current["report-block-schemeTable"]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 80);
+  };
 
   const getReportFieldLines = (field: typeof aiGeneratedFields[number], fallbackLines?: string[]) => {
     const manualContent = manualReportFieldContents[field.id];
@@ -875,7 +1104,7 @@ export const EditReportView = ({
 
   const getReportBlockPreviewRows = (blockId: string): ReportBlockPreviewRow[] => {
     const fieldValue = (fieldId: string) => {
-      const field = getGeneratedField(fieldId);
+      const field = aiGeneratedFields.find((item) => item.id === fieldId);
       return field ? manualReportFieldContents[field.id] ?? field.content : "";
     };
 
@@ -916,6 +1145,65 @@ export const EditReportView = ({
     };
 
     return blockPreviewRows[blockId] ?? [];
+  };
+
+  const schemePreviewRows = getReportBlockPreviewRows("schemeTable");
+  const schemeGeneratedPreviewRows = schemePreviewRows.map((row) => ({
+    ...row,
+    generatedValue: `${row.originalValue || "待补充"}（按新规则校验并补充来源依据）`,
+  }));
+
+  const renderSchemeComparisonTable = (
+    rows: ReportBlockPreviewRow[],
+    valueKey: "originalValue" | "generatedValue",
+    tone: "normal" | "generated" = "normal",
+  ) => {
+    const value = (label: string) => {
+      const row = rows.find((item) => item.label === label);
+      return (valueKey === "generatedValue" ? row?.generatedValue : row?.originalValue) || row?.originalValue || "待补充";
+    };
+    const labelClassName =
+      tone === "generated"
+        ? "border border-slate-900 bg-blue-50 px-2 py-2 text-center font-medium text-slate-900"
+        : "border border-slate-900 bg-slate-100 px-2 py-2 text-center font-medium text-slate-900";
+    const valueClassName = "border border-slate-900 px-2 py-2 text-left text-slate-900";
+
+    return (
+      <table className="w-full min-w-[760px] table-fixed border-collapse border border-slate-900 text-center text-[13px] leading-6">
+        <tbody>
+          <tr>
+            <td className={`w-32 ${labelClassName}`}>企业名称</td>
+            <td colSpan={3} className={valueClassName}>
+              {value("企业名称")}
+            </td>
+          </tr>
+          <tr>
+            <td className={labelClassName}>归属支行</td>
+            <td className={valueClassName}>{value("归属支行")}</td>
+            <td className={labelClassName}>调查人（双人）</td>
+            <td className={valueClassName}>{value("调查人（双人）")}</td>
+          </tr>
+          <tr>
+            <td className={labelClassName}>行业分类</td>
+            <td className={valueClassName}>{value("行业分类")}</td>
+            <td className={labelClassName}>申请额度</td>
+            <td className={valueClassName}>{value("申请额度")}</td>
+          </tr>
+          <tr>
+            <td className={labelClassName}>贷款用途</td>
+            <td className={valueClassName}>{value("贷款用途")}</td>
+            <td className={labelClassName}>担保方式</td>
+            <td className={valueClassName}>{value("担保方式")}</td>
+          </tr>
+          <tr>
+            <td className={labelClassName}>授信期限</td>
+            <td className={valueClassName}>12个月</td>
+            <td className={labelClassName}>还款方式</td>
+            <td className={valueClassName}>按月付息，到期还本</td>
+          </tr>
+        </tbody>
+      </table>
+    );
   };
 
   const buildGeneratedBlockPreviewValue = (row: ReportBlockPreviewRow, index: number, extractionRule: string, businessRule: string) => {
@@ -1012,48 +1300,11 @@ export const EditReportView = ({
       isOpen: true,
       blockId: block.id,
       fieldName: block.name,
+      dataSource: block.dataSource,
       extractionRule: block.extractionRule,
       businessRule: block.businessRule,
       previewContent: "",
       previewRows: getReportBlockPreviewRows(block.id),
-    });
-  };
-
-  const generateFieldRulePreview = () => {
-    setFieldRuleModal((previous) => {
-      const sourceLabel = previous.dataSource.trim() || "当前已选资料";
-      const ruleLabel = previous.businessRule.trim() || "保持与数据来源一致";
-      const currentValue =
-        selectedGeneratedField
-          ? manualReportFieldContents[selectedGeneratedField.id] ?? selectedGeneratedField.content
-          : "根据规则生成的字段内容";
-      const generatedValue = `${currentValue}（按新规则补充证据来源与业务口径）`;
-
-      return {
-        ...previous,
-        previewContent: `原始数据：${currentValue}；新规则生成数据：${generatedValue}`,
-        originalValue: currentValue,
-        generatedValue,
-      };
-    });
-  };
-
-  const generateReportBlockRulePreview = () => {
-    setReportBlockRuleModal((previous) => {
-      const extractionRule = previous.extractionRule.trim() || "按当前章节字段规则抽取";
-      const businessRule = previous.businessRule.trim() || "保持章节内容与来源一致";
-      const sourceLabel = reportBlockConfigs[previous.blockId]?.dataSource || "当前章节资料";
-      const originalRows = getReportBlockPreviewRows(previous.blockId);
-      const previewRows = originalRows.map((row, index) => ({
-        ...row,
-        generatedValue: buildGeneratedBlockPreviewValue(row, index, extractionRule, businessRule),
-      }));
-
-      return {
-        ...previous,
-        previewContent: `预览结果：${previous.fieldName} 将基于「${sourceLabel}」，按“${extractionRule}”抽取，并应用“${businessRule}”。生成内容会覆盖本段核心字段、证据来源和风险提示口径。`,
-        previewRows,
-      };
     });
   };
 
@@ -2494,10 +2745,10 @@ export const EditReportView = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">
-                    {selectedReportBlock ? "段落配置" : "AI 生成审查"}
+                    {selectedReportBlock ? "段落配置" : "AI 生成总览"}
                   </h3>
                   <p className="text-[11px] text-gray-500">
-                    {selectedReportBlock ? "显示这一段的数据来源、抽取规则与业务规则" : "字段来源、准确性、计算规则审查"}
+                    {selectedReportBlock ? "显示这一段的数据来源与业务规则" : "字段来源、准确性、计算规则审查"}
                   </p>
                 </div>
               </div>
@@ -2531,7 +2782,7 @@ export const EditReportView = ({
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Database size={15} className="text-blue-600" />
-                      <h4 className="text-sm font-bold text-slate-900">表格数据来源</h4>
+                      <h4 className="text-sm font-bold text-slate-900">数据溯源</h4>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
                       {selectedReportBlock.sourceFiles.length} 个来源
@@ -2595,8 +2846,8 @@ export const EditReportView = ({
                   </div>
                   <div className="space-y-2">
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold text-slate-400">抽取规则</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-700">{selectedReportBlock.extractionRule}</p>
+                      <p className="text-[10px] font-bold text-slate-400">数据来源</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-700">{selectedReportBlock.dataSource}</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
                       <p className="text-[10px] font-bold text-slate-400">业务规则</p>
@@ -2624,6 +2875,54 @@ export const EditReportView = ({
                       <p className="mt-2 text-xl font-black text-slate-700">{missingGeneratedFields.length}</p>
                       <p className="mt-0.5 text-[10px] font-bold text-slate-600">未找到</p>
                     </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={15} className="text-blue-600" />
+                      <h4 className="text-sm font-bold text-blue-950">新规则生成数据预览</h4>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600">
+                      预览
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {newRulePreviewItems.map((item) => {
+                      const statusMeta = getRulePreviewStatusMeta(item.status);
+
+                      return (
+                        <button
+                          key={item.field.id}
+                          type="button"
+                          disabled={item.status !== "generated"}
+                          onClick={() => {
+                            if (item.status === "generated") {
+                              setSelectedRulePreviewFieldId(item.field.id);
+                            }
+                          }}
+                          className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/50 disabled:cursor-not-allowed disabled:hover:border-blue-100 disabled:hover:bg-white"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="truncate text-xs font-bold text-slate-900">{item.field.name}</p>
+                            <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusMeta.className}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClassName}`} />
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-[11px] text-slate-500">{item.field.section}</p>
+                          <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-slate-600">
+                            {item.status === "failed" ? "新规则生成失败，请调整数据来源或业务规则后重试。" : item.generatedValue}
+                          </p>
+                        </button>
+                      );
+                    })}
+                    {newRulePreviewItems.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-blue-100 bg-white/70 px-3 py-4 text-center text-xs text-slate-500">
+                        暂无新规则生成记录
+                      </div>
+                    )}
                   </div>
                 </section>
 
@@ -2802,13 +3101,13 @@ export const EditReportView = ({
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <BookOpen size={15} className="text-blue-600" />
-                      <h4 className="text-sm font-bold text-slate-900">抽取规则</h4>
+                      <h4 className="text-sm font-bold text-slate-900">规则配置</h4>
                     </div>
                     <button
                       onClick={() => openFieldRuleModal(selectedGeneratedField)}
                       className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                     >
-                      规则设置
+                      编辑规则
                     </button>
                   </div>
                   <div className="space-y-2">
@@ -2880,6 +3179,77 @@ export const EditReportView = ({
       />
 
       <AnimatePresence>
+        {selectedRulePreviewItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 px-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              className="w-full max-w-5xl rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">新规则生成数据对比</h3>
+                  <p className="mt-1 text-sm text-slate-500">报审方案及尽调情况</p>
+                </div>
+                <button
+                  onClick={() => setSelectedRulePreviewFieldId(null)}
+                  className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-5 max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+                <section className="rounded-2xl border border-slate-200 bg-white">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <h4 className="text-sm font-bold text-slate-900">现状数据</h4>
+                  </div>
+                  <div className="overflow-x-auto bg-white p-4">
+                    {renderSchemeComparisonTable(schemePreviewRows, "originalValue")}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-blue-100 bg-white">
+                  <div className="border-b border-blue-100 px-4 py-3">
+                    <h4 className="text-sm font-bold text-blue-950">新规则生成数据</h4>
+                  </div>
+                  <div className="overflow-x-auto bg-white p-4">
+                    {renderSchemeComparisonTable(schemeGeneratedPreviewRows, "generatedValue", "generated")}
+                  </div>
+                </section>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
+                确认后会将“新规则生成数据”插入到报告对应字段，并同步更新左侧报告内容。
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setSelectedRulePreviewFieldId(null)}
+                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={applyRulePreviewToReport}
+                  disabled={selectedRulePreviewItem.status !== "generated"}
+                  className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  更新报告数据
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {fieldRuleModal.isOpen && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -2891,11 +3261,11 @@ export const EditReportView = ({
               initial={{ opacity: 0, y: 16, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl"
+              className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">规则设置</h3>
+                  <h3 className="text-lg font-bold text-slate-900">编辑规则</h3>
                   <p className="mt-1 text-sm text-slate-500">{fieldRuleModal.fieldName}</p>
                 </div>
                 <button
@@ -2907,32 +3277,13 @@ export const EditReportView = ({
               </div>
 
               <div className="mt-5 space-y-4">
-                {fieldRuleModal.previewContent && (
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
-                    <div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-700">
-                      <Sparkles size={14} />
-                      生成数据预览
-                    </div>
-                    <div className="grid gap-3">
-                      <div className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-6 text-slate-700">
-                        <span className="mr-1 font-bold text-slate-500">原始数据：</span>
-                        {fieldRuleModal.originalValue || "待补充"}
-                      </div>
-                      <div className="rounded-xl bg-blue-50 px-3 py-2 text-sm leading-6 text-blue-800 ring-1 ring-blue-100">
-                        <span className="mr-1 font-bold text-blue-600">新规则生成数据：</span>
-                        {fieldRuleModal.generatedValue || "待生成"}
-                      </div>
-                    </div>
-                  </div>
-                )}
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
-                  <textarea
+                  <RuleDataSourceTreeSelect
                     value={fieldRuleModal.dataSource}
-                    onChange={(event) =>
-                      setFieldRuleModal((previous) => ({ ...previous, dataSource: event.target.value }))
+                    onChange={(nextValue) =>
+                      setFieldRuleModal((previous) => ({ ...previous, dataSource: nextValue }))
                     }
-                    className="min-h-[88px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
                 </label>
                 <label className="block">
@@ -2946,7 +3297,7 @@ export const EditReportView = ({
                   />
                 </label>
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
-                  保存后会将采用您制定的规则为这个项目生成新的模板，后续报告生成将按新的数据来源和业务规则执行。
+                  保存后将根据新的规则为您生成预览数据，请稍后到“AI生成总览”面板查看，后续当前项目的报告生成将按新的规则生成！
                 </div>
               </div>
 
@@ -2956,12 +3307,6 @@ export const EditReportView = ({
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   取消
-                </button>
-                <button
-                  onClick={generateFieldRulePreview}
-                  className="rounded-2xl border border-blue-200 px-4 py-2.5 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
-                >
-                  生成预览
                 </button>
                 <button
                   onClick={() => setFieldRuleModal({ isOpen: false, fieldName: "", currentRule: "", dataSource: "", businessRule: "", previewContent: "", originalValue: "", generatedValue: "" })}
@@ -2987,11 +3332,11 @@ export const EditReportView = ({
               initial={{ opacity: 0, y: 16, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              className="w-full max-w-6xl rounded-3xl bg-white p-6 shadow-2xl"
+              className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">规则设置</h3>
+                  <h3 className="text-lg font-bold text-slate-900">编辑规则</h3>
                   <p className="mt-1 text-sm text-slate-500">{reportBlockRuleModal.fieldName}</p>
                 </div>
                 <button
@@ -3000,6 +3345,7 @@ export const EditReportView = ({
                       isOpen: false,
                       blockId: "",
                       fieldName: "",
+                      dataSource: "",
                       extractionRule: "",
                       businessRule: "",
                       previewContent: "",
@@ -3012,34 +3358,15 @@ export const EditReportView = ({
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-                <section className="min-h-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">数据预览</h4>
-                      <p className="mt-1 text-xs text-slate-500">生成预览后可对比原始数据与新规则生成数据。</p>
-                    </div>
-                    {reportBlockRuleModal.previewContent && (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                        已生成预览
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="max-h-[440px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
-                    {renderReportBlockPreviewTable(reportBlockRuleModal.blockId, reportBlockRuleModal.previewRows)}
-                  </div>
-                </section>
-
+              <div className="mt-5">
                 <section className="space-y-4">
                   <label className="block">
                     <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
-                    <textarea
-                      value={reportBlockRuleModal.extractionRule}
-                      onChange={(event) =>
-                        setReportBlockRuleModal((previous) => ({ ...previous, extractionRule: event.target.value }))
+                    <RuleDataSourceTreeSelect
+                      value={reportBlockRuleModal.dataSource}
+                      onChange={(nextValue) =>
+                        setReportBlockRuleModal((previous) => ({ ...previous, dataSource: nextValue }))
                       }
-                      className="min-h-[100px] w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                     />
                   </label>
                   <label className="block">
@@ -3053,7 +3380,7 @@ export const EditReportView = ({
                     />
                   </label>
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-800">
-                    保存后会更新这一段的抽取规则和业务规则，后续生成将按新的规则执行。
+                    保存后将根据新的规则为您生成预览数据，请稍后到“AI生成总览”面板查看，后续当前项目的报告生成将按新的规则生成！
                   </div>
                 </section>
               </div>
@@ -3065,6 +3392,7 @@ export const EditReportView = ({
                       isOpen: false,
                       blockId: "",
                       fieldName: "",
+                      dataSource: "",
                       extractionRule: "",
                       businessRule: "",
                       previewContent: "",
@@ -3076,21 +3404,16 @@ export const EditReportView = ({
                   取消
                 </button>
                 <button
-                  onClick={generateReportBlockRulePreview}
-                  className="rounded-2xl border border-blue-200 px-4 py-2.5 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
-                >
-                  生成预览
-                </button>
-                <button
                   onClick={() => {
                     updateReportBlockConfig(reportBlockRuleModal.blockId, {
-                      extractionRule: reportBlockRuleModal.extractionRule,
+                      dataSource: reportBlockRuleModal.dataSource,
                       businessRule: reportBlockRuleModal.businessRule,
                     });
                     setReportBlockRuleModal({
                       isOpen: false,
                       blockId: "",
                       fieldName: "",
+                      dataSource: "",
                       extractionRule: "",
                       businessRule: "",
                       previewContent: "",
