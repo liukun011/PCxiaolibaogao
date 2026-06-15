@@ -1408,6 +1408,27 @@ export const DocumentClassificationSection = ({
         }`}>
           <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="h-full space-y-1 overflow-y-auto pr-1">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-gray-100 pb-3">
+                <span className="shrink-0 text-sm font-bold text-gray-800">文件目录</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium text-gray-400">
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                    总数 12
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                    解析中 2
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    成功 8
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    失败 0
+                  </span>
+                </div>
+              </div>
               {folderTree.map((node) => (
                 <div key={node.path}>
                   <FolderTreeNode
