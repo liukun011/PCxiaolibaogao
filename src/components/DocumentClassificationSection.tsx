@@ -14,6 +14,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   Tag,
   Trash2,
   Upload,
@@ -511,6 +512,7 @@ export const DocumentClassificationSection = ({
   const [pendingUpload, setPendingUpload] = useState<PendingUploadState | null>(null);
   const [isReparsingFailedFiles, setIsReparsingFailedFiles] = useState(false);
   const [showParseFailuresPopover, setShowParseFailuresPopover] = useState(false);
+  const [showDirectoryFailuresPopover, setShowDirectoryFailuresPopover] = useState(false);
   const [addingTagId, setAddingTagId] = useState<string | null>(null);
   const [editingTag, setEditingTag] = useState<{ fileId: string; tag: string } | null>(null);
   const [tagInput, setTagInput] = useState('');
@@ -529,10 +531,14 @@ export const DocumentClassificationSection = ({
   const selectedFolderRef = useRef(selectedFolder);
   const currentUploadTargetRef = useRef<string>(DEFAULT_UPLOAD_FOLDER);
   const parseFailuresPopoverTimerRef = useRef<number | null>(null);
+  const directoryFailuresPopoverTimerRef = useRef<number | null>(null);
   const uploadProgressDismissTimerRef = useRef<number | null>(null);
   const uploadSummaryDismissTimerRef = useRef<number | null>(null);
   const uploadJobSequenceRef = useRef(0);
   const activeUploadJobRef = useRef<{ id: number; cancelled: boolean } | null>(null);
+  const pendingVisibleFileLimitRef = useRef<number | null>(null);
+  const pendingScrollFileIdRef = useRef<string | null>(null);
+  const fileRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     selectedFolderRef.current = selectedFolder;
@@ -542,6 +548,9 @@ export const DocumentClassificationSection = ({
     return () => {
       if (parseFailuresPopoverTimerRef.current) {
         window.clearTimeout(parseFailuresPopoverTimerRef.current);
+      }
+      if (directoryFailuresPopoverTimerRef.current) {
+        window.clearTimeout(directoryFailuresPopoverTimerRef.current);
       }
       if (uploadProgressDismissTimerRef.current) {
         window.clearTimeout(uploadProgressDismissTimerRef.current);
@@ -593,8 +602,31 @@ export const DocumentClassificationSection = ({
   }, [files, onFilesStateChange]);
 
   useEffect(() => {
+    const pendingVisibleFileLimit = pendingVisibleFileLimitRef.current;
+    if (pendingVisibleFileLimit !== null) {
+      setVisibleFileLimit(Math.max(FILES_PAGE_SIZE, pendingVisibleFileLimit));
+      pendingVisibleFileLimitRef.current = null;
+      return;
+    }
+
     setVisibleFileLimit(FILES_PAGE_SIZE);
   }, [files.length, selectedFolder]);
+
+  useEffect(() => {
+    if (!selectedFileId || pendingScrollFileIdRef.current !== selectedFileId) {
+      return;
+    }
+
+    const selectedRow = fileRowRefs.current[selectedFileId];
+    if (!selectedRow) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      selectedRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      pendingScrollFileIdRef.current = null;
+    });
+  }, [selectedFileId, visibleCurrentFiles]);
 
   const openCreateFolderDialog = (parentPath: string) => {
     setFolderDialog({
@@ -1278,6 +1310,41 @@ export const DocumentClassificationSection = ({
     }, 220);
   };
 
+  const openDirectoryFailuresPopover = () => {
+    if (directoryFailuresPopoverTimerRef.current) {
+      window.clearTimeout(directoryFailuresPopoverTimerRef.current);
+      directoryFailuresPopoverTimerRef.current = null;
+    }
+    setShowDirectoryFailuresPopover(true);
+  };
+
+  const closeDirectoryFailuresPopover = () => {
+    if (directoryFailuresPopoverTimerRef.current) {
+      window.clearTimeout(directoryFailuresPopoverTimerRef.current);
+    }
+
+    directoryFailuresPopoverTimerRef.current = window.setTimeout(() => {
+      setShowDirectoryFailuresPopover(false);
+      directoryFailuresPopoverTimerRef.current = null;
+    }, 220);
+  };
+
+  const jumpToFailedFile = (file: KnowledgeDocument) => {
+    const targetFolderFiles = [...(groupedFiles[file.directoryPath] ?? [])].sort((left, right) =>
+      left.title.localeCompare(right.title, 'zh-CN'),
+    );
+    const targetFileIndex = targetFolderFiles.findIndex((currentFile) => currentFile.id === file.id);
+    const nextVisibleFileLimit =
+      targetFileIndex >= 0 ? Math.max(FILES_PAGE_SIZE, targetFileIndex + 1) : FILES_PAGE_SIZE;
+
+    pendingVisibleFileLimitRef.current = nextVisibleFileLimit;
+    pendingScrollFileIdRef.current = file.id;
+    setSelectedFolder(file.directoryPath);
+    setVisibleFileLimit(nextVisibleFileLimit);
+    setSelectedFileId(file.id);
+    openDirectoryFailuresPopover();
+  };
+
   const submitTag = (fileId: string) => {
     if (tagInput.trim()) {
       setFiles((previous) =>
@@ -1404,10 +1471,84 @@ export const DocumentClassificationSection = ({
 
       {hasMaterials ? (
         <div className={`grid h-[calc(100vh-13.5rem)] min-h-[42rem] grid-cols-1 items-stretch gap-4 ${
-          hideFileDetails ? 'xl:grid-cols-[240px_minmax(0,1fr)]' : 'xl:grid-cols-[240px_minmax(0,1fr)_320px]'
+          hideFileDetails ? 'xl:grid-cols-[280px_minmax(0,1fr)]' : 'xl:grid-cols-[280px_minmax(0,1fr)_320px]'
         }`}>
           <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="h-full space-y-1 overflow-y-auto pr-1">
+              <div className="mb-2 space-y-2 border-b border-gray-100 pb-3">
+                <div className="text-sm font-bold text-gray-800">文件目录</div>
+                <div className="flex flex-nowrap items-center gap-2 text-[11px] font-medium text-gray-400">
+                  <div
+                    className="relative shrink-0"
+                    onMouseEnter={openDirectoryFailuresPopover}
+                    onMouseLeave={closeDirectoryFailuresPopover}
+                    onFocus={openDirectoryFailuresPopover}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowDirectoryFailuresPopover((previous) => !previous)}
+                      className="flex items-center gap-0.5 whitespace-nowrap rounded px-0.5 py-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                    >
+                      <span className="h-1 w-1 rounded-full bg-red-400" />
+                      失败 {failedFiles.length}
+                    </button>
+
+                    <div
+                      className={`absolute left-0 top-[calc(100%+8px)] z-30 w-[240px] rounded-xl border border-gray-200 bg-white p-3 text-left shadow-xl transition-all ${
+                        showDirectoryFailuresPopover
+                          ? 'visible pointer-events-auto opacity-100'
+                          : 'invisible pointer-events-none opacity-0'
+                      }`}
+                    >
+                      <div className="absolute -top-2 left-6 h-4 w-4 rotate-45 border-l border-t border-gray-200 bg-white" />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 truncate text-[11px] font-bold text-gray-800">
+                          {failedFiles.length > 0 ? `解析失败文件 (${failedFiles.length})` : '暂无解析失败文件'}
+                        </div>
+                        {failedFiles.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={reparseFailedFiles}
+                            disabled={isReparsingFailedFiles}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:cursor-wait disabled:text-gray-300 disabled:hover:bg-transparent"
+                            title={isReparsingFailedFiles ? '重新解析中' : '重新解析'}
+                            aria-label={isReparsingFailedFiles ? '重新解析中' : '重新解析失败文件'}
+                          >
+                            <RefreshCw size={14} className={isReparsingFailedFiles ? 'animate-spin' : ''} />
+                          </button>
+                        )}
+                      </div>
+                      {failedFiles.length > 0 && (
+                        <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
+                          {failedFiles.map((file) => (
+                            <button
+                              key={file.id}
+                              type="button"
+                              onClick={() => jumpToFailedFile(file)}
+                              className="block w-full rounded-lg bg-red-50/80 px-2.5 py-2 text-left transition-colors hover:bg-red-100"
+                            >
+                              <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
+                              <div className="mt-1 text-[10px] text-red-700">{file.parseError ?? '解析失败'}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                    成功 8
+                  </span>
+                  <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                    <span className="h-1 w-1 rounded-full bg-amber-400" />
+                    解析中 2
+                  </span>
+                  <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                    <span className="h-1 w-1 rounded-full bg-gray-400" />
+                    总数 12
+                  </span>
+                </div>
+              </div>
               {folderTree.map((node) => (
                 <div key={node.path}>
                   <FolderTreeNode
@@ -1607,6 +1748,9 @@ export const DocumentClassificationSection = ({
                     return (
                       <div
                         key={file.id}
+                        ref={(element) => {
+                          fileRowRefs.current[file.id] = element;
+                        }}
                         className={`grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
                           isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                         }`}
