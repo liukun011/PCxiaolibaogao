@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CheckSquare,
   Eye,
   FileText,
   FolderPlus,
@@ -15,6 +16,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Square,
   Tag,
   Trash2,
   Upload,
@@ -517,6 +519,7 @@ export const DocumentClassificationSection = ({
   const [editingTag, setEditingTag] = useState<{ fileId: string; tag: string } | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [visibleFileLimit, setVisibleFileLimit] = useState(FILES_PAGE_SIZE);
+  const [selectedBatchFileIds, setSelectedBatchFileIds] = useState<string[]>([]);
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const [folderNameInput, setFolderNameInput] = useState('');
   const [folderDialogError, setFolderDialogError] = useState('');
@@ -581,6 +584,20 @@ export const DocumentClassificationSection = ({
     () => currentFiles.slice(0, visibleFileLimit),
     [currentFiles, visibleFileLimit],
   );
+  const visibleDeletableFileIds = useMemo(
+    () =>
+      visibleCurrentFiles
+        .filter((file) => file.sourceKind !== 'interview')
+        .map((file) => file.id),
+    [visibleCurrentFiles],
+  );
+  const selectedVisibleBatchFileIds = useMemo(
+    () => selectedBatchFileIds.filter((fileId) => visibleDeletableFileIds.includes(fileId)),
+    [selectedBatchFileIds, visibleDeletableFileIds],
+  );
+  const isAllVisibleFilesSelected =
+    visibleDeletableFileIds.length > 0 &&
+    selectedVisibleBatchFileIds.length === visibleDeletableFileIds.length;
   const hasMoreCurrentFiles = visibleCurrentFiles.length < currentFiles.length;
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
   const breadcrumbs = useMemo(() => buildBreadcrumbs(selectedFolder), [selectedFolder]);
@@ -595,6 +612,7 @@ export const DocumentClassificationSection = ({
     if (selectedFileId && !files.some((file) => file.id === selectedFileId)) {
       setSelectedFileId(null);
     }
+    setSelectedBatchFileIds((previous) => previous.filter((fileId) => files.some((file) => file.id === fileId)));
   }, [files, selectedFileId]);
 
   useEffect(() => {
@@ -610,6 +628,7 @@ export const DocumentClassificationSection = ({
     }
 
     setVisibleFileLimit(FILES_PAGE_SIZE);
+    setSelectedBatchFileIds([]);
   }, [files.length, selectedFolder]);
 
   useEffect(() => {
@@ -1172,6 +1191,62 @@ export const DocumentClassificationSection = ({
     setFiles((previous) => previous.filter((file) => file.id !== fileId));
     setAddingTagId((previous) => (previous === fileId ? null : previous));
     setSelectedFileId((previous) => (previous === fileId ? null : previous));
+    setSelectedBatchFileIds((previous) => previous.filter((currentFileId) => currentFileId !== fileId));
+  };
+
+  const toggleBatchFileSelection = (fileId: string) => {
+    const targetFile = files.find((file) => file.id === fileId);
+    if (targetFile?.sourceKind === 'interview') {
+      return;
+    }
+
+    setSelectedBatchFileIds((previous) =>
+      previous.includes(fileId)
+        ? previous.filter((currentFileId) => currentFileId !== fileId)
+        : [...previous, fileId],
+    );
+  };
+
+  const toggleSelectVisibleFiles = () => {
+    if (visibleDeletableFileIds.length === 0) {
+      return;
+    }
+
+    setSelectedBatchFileIds((previous) => {
+      if (isAllVisibleFilesSelected) {
+        return previous.filter((fileId) => !visibleDeletableFileIds.includes(fileId));
+      }
+
+      return Array.from(new Set([...previous, ...visibleDeletableFileIds]));
+    });
+  };
+
+  const deleteSelectedFiles = () => {
+    const deletableSelectedFileIds = selectedBatchFileIds.filter((fileId) => {
+      const targetFile = files.find((file) => file.id === fileId);
+      return targetFile?.sourceKind !== 'interview';
+    });
+
+    if (deletableSelectedFileIds.length === 0) {
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      `确定删除已选的 ${deletableSelectedFileIds.length} 个文件吗？删除后将无法恢复。`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    const deletableSelectedFileIdSet = new Set(deletableSelectedFileIds);
+    setFiles((previous) => previous.filter((file) => !deletableSelectedFileIdSet.has(file.id)));
+    setAddingTagId((previous) => (previous && deletableSelectedFileIdSet.has(previous) ? null : previous));
+    setEditingTag((previous) =>
+      previous && deletableSelectedFileIdSet.has(previous.fileId) ? null : previous,
+    );
+    setSelectedFileId((previous) => (previous && deletableSelectedFileIdSet.has(previous) ? null : previous));
+    setSelectedBatchFileIds([]);
   };
 
   const toggleAudioPlayback = (fileId: string) => {
@@ -1598,6 +1673,21 @@ export const DocumentClassificationSection = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {currentFiles.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={deleteSelectedFiles}
+                      disabled={selectedBatchFileIds.length === 0}
+                      className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
+                        selectedBatchFileIds.length === 0
+                          ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                          : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                      }`}
+                    >
+                      <Trash2 size={13} />
+                      删除已选{selectedBatchFileIds.length > 0 ? ` ${selectedBatchFileIds.length}` : ''}
+                    </button>
+                  )}
                   {!isInterviewFolderSelected && (
                     <div
                       className="relative"
@@ -1733,7 +1823,17 @@ export const DocumentClassificationSection = ({
 
               {currentFiles.length > 0 ? (
                 <div className="px-3 py-2">
-                  <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  <div className="grid grid-cols-[34px_minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    <button
+                      type="button"
+                      onClick={toggleSelectVisibleFiles}
+                      disabled={visibleDeletableFileIds.length === 0}
+                      className="flex h-6 w-6 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                      title={isAllVisibleFilesSelected ? '取消全选' : '全选当前可删文件'}
+                      aria-label={isAllVisibleFilesSelected ? '取消全选当前可删文件' : '全选当前可删文件'}
+                    >
+                      {isAllVisibleFilesSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+                    </button>
                     <span>名称</span>
                     <span>标签</span>
                     <span>上传时间</span>
@@ -1742,6 +1842,8 @@ export const DocumentClassificationSection = ({
 
                   {visibleCurrentFiles.map((file) => {
                     const isSelected = selectedFile?.id === file.id;
+                    const isBatchSelected = selectedBatchFileIds.includes(file.id);
+                    const canDeleteFile = file.sourceKind !== 'interview';
 
                     return (
                       <div
@@ -1749,10 +1851,26 @@ export const DocumentClassificationSection = ({
                         ref={(element) => {
                           fileRowRefs.current[file.id] = element;
                         }}
-                        className={`grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
+                        className={`grid grid-cols-[34px_minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
                           isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                         }`}
                       >
+                        <button
+                          type="button"
+                          onClick={() => toggleBatchFileSelection(file.id)}
+                          disabled={!canDeleteFile}
+                          className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                            canDeleteFile
+                              ? isBatchSelected
+                                ? 'text-blue-600 hover:bg-blue-100'
+                                : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
+                              : 'cursor-not-allowed text-gray-200'
+                          }`}
+                          title={canDeleteFile ? (isBatchSelected ? '取消选择' : '选择文件') : '访谈文件不可删除'}
+                          aria-label={canDeleteFile ? (isBatchSelected ? '取消选择文件' : '选择文件') : '访谈文件不可删除'}
+                        >
+                          {isBatchSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+                        </button>
                         <button
                           type="button"
                           onClick={() => setSelectedFileId(file.id)}
@@ -1874,7 +1992,7 @@ export const DocumentClassificationSection = ({
                           >
                             <Pencil size={13} />
                           </button>
-                          {file.sourceKind !== 'interview' && (
+                          {canDeleteFile && (
                             <button
                               type="button"
                               onClick={() => deleteFile(file.id)}
