@@ -1528,7 +1528,6 @@ export const DocumentClassificationSection = ({
                               className="block w-full rounded-lg bg-red-50/80 px-2.5 py-2 text-left transition-colors hover:bg-red-100"
                             >
                               <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
-                              <div className="mt-1 text-[10px] text-red-700">{file.parseError ?? '解析失败'}</div>
                             </button>
                           ))}
                         </div>
@@ -1637,7 +1636,6 @@ export const DocumentClassificationSection = ({
                             {failedFiles.map((file) => (
                               <div key={file.id} className="rounded-lg bg-red-50/80 px-2.5 py-2">
                                 <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
-                                <div className="mt-1 text-[10px] text-red-700">{file.parseError ?? '解析失败'}</div>
                               </div>
                             ))}
                           </div>
