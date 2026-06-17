@@ -116,6 +116,9 @@ export default function App() {
   const requestedTemplateId = initialUrlParams.get("templateId");
   const requestedReportTitle = initialUrlParams.get("reportTitle");
   const requestedCompanyName = initialUrlParams.get("companyName");
+  const requestedReportStatus = initialUrlParams.get("reportStatus");
+  const requestedReportGenerated = initialUrlParams.get("reportGenerated") === "true";
+  const requestedReportStage = initialUrlParams.get("reportStage");
   const initialStandaloneShell = requestedView === "dashboard" || requestedView === "templatePreview";
 
   // Define ViewType explicitly for App.tsx if it's not centralized in a types file
@@ -159,6 +162,9 @@ export default function App() {
       ? {
           projectName: requestedReportTitle || "未命名尽调项目",
           companyName: requestedCompanyName || requestedReportTitle || "",
+          reportGenerated: requestedReportGenerated,
+          reportStatus: requestedReportStatus || undefined,
+          reportStage: requestedReportStage || undefined,
           isSkip: true,
           isPending: false,
           questions: [],
@@ -300,13 +306,28 @@ export default function App() {
   // handleStartBackgroundAI is moved to be defined later, as it's not the cause of the current error
   // The original problem was the lingering modal JSX, and the definition order might be okay.
 
-  const openDashboardInNewTab = (project: { id: number; title: string; desc: string }) => {
+  const openDashboardInNewTab = (project: {
+    id: number;
+    title: string;
+    desc: string;
+    companyName?: string;
+    reportGenerated?: boolean;
+    reportStatus?: string;
+    status?: string;
+    reportStage?: string;
+  }) => {
+    const reportStatus = project.status || project.reportStatus || (project.reportGenerated ? "generated" : "pending");
     const params = new URLSearchParams({
       view: "dashboard",
       reportId: String(project.id),
       reportTitle: project.title,
-      companyName: project.title,
+      companyName: project.companyName || project.title,
+      reportGenerated: String(Boolean(project.reportGenerated)),
+      reportStatus,
     });
+    if (project.reportStage) {
+      params.set("reportStage", project.reportStage);
+    }
     window.open(`${window.location.pathname}?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 

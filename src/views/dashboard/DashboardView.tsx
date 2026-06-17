@@ -1367,32 +1367,134 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   const generatedReportName =
     storedGeneratedReportMeta?.name ||
     `${intelligenceResult?.projectName || intelligenceResult?.companyName || "未命名尽调项目"}流贷尽调报告`;
-  const generatedReportTime = intelligenceResult?.reportGeneratedAt || storedGeneratedReportMeta?.generatedAt || "暂未记录";
-  const shouldShowGeneratedReportInfo = reportGenerationStatus === "generated" || Boolean(intelligenceResult?.reportGenerated);
+  const reportSummaryStatus: ReportGenerationStatus =
+    reportGenerationStatus === "generated" || intelligenceResult?.reportStatus === "generated" || intelligenceResult?.reportGenerated
+      ? "generated"
+      : intelligenceResult?.reportStatus === "generating"
+        ? "generating"
+        : "idle";
+  const reportSummaryStatusLabel =
+    reportSummaryStatus === "generated" ? "已生成" : reportSummaryStatus === "generating" ? "生成中" : "未生成";
+  const reportSummaryStatusClass =
+    reportSummaryStatus === "generated"
+      ? "bg-emerald-50 text-emerald-700"
+      : reportSummaryStatus === "generating"
+        ? "bg-blue-50 text-blue-700"
+        : "bg-slate-100 text-slate-600";
+  const generatedReportTime =
+    intelligenceResult?.reportGeneratedAt ||
+    storedGeneratedReportMeta?.generatedAt ||
+    (reportSummaryStatus === "generated" ? "暂未记录" : "暂未生成");
+  const reportSummaryCompanyInfo = {
+    name: dashboardCompanyName !== "未填写企业名称" ? dashboardCompanyName : "XX科技有限公司",
+    fullName: "北京零壹视界科技有限公司",
+    creditCode: "91110108MABPQGBR62",
+  };
+  const generatedReportTemplateName = intelligenceResult?.reportTemplateName || "BJYH尽调报告";
+  const shouldShowGeneratedReportInfo = true;
   const generatedReportInfoBar = shouldShowGeneratedReportInfo ? (
-    <section className="mb-4 flex w-full basis-full flex-wrap items-center justify-between gap-3 self-stretch rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500">
-          <Check size={13} strokeWidth={3} className="text-white" />
-        </span>
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-bold text-slate-900">{generatedReportName}</h3>
-          <p className="mt-1 text-xs font-medium text-slate-500">生成时间：{generatedReportTime}</p>
+    <section className="mb-4 w-full basis-full self-stretch rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <div className="grid items-center gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <div className="flex min-w-0 items-center gap-4 border-b border-slate-100 pb-4 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <Building size={28} />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-lg font-bold text-slate-900">{reportSummaryCompanyInfo.name}</div>
+            <div className="mt-1 truncate text-sm font-medium text-slate-500">{reportSummaryCompanyInfo.fullName}</div>
+            <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+              <Shield size={12} className="shrink-0 text-slate-400" />
+              <span className="truncate">{reportSummaryCompanyInfo.creditCode}</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-3 text-xs font-bold">
-        <button type="button" onClick={openGeneratedReport} className="text-blue-600 hover:text-blue-700">
-          查看报告
-        </button>
-        <button type="button" onClick={downloadGeneratedReport} className="text-blue-600 hover:text-blue-700">
-          下载报告
-        </button>
-        <button type="button" onClick={startReportGeneration} className="text-blue-600 hover:text-blue-700">
-          重新生成
-        </button>
-        <button type="button" onClick={() => setShowReportGenerationPanel(true)} className="text-blue-600 hover:text-blue-700">
-          查看生成过程
-        </button>
+
+        <div className="min-w-0">
+          <div className="space-y-2.5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="w-20 shrink-0 text-xs font-bold text-slate-400">报告模板：</span>
+              <span className="min-w-0 truncate text-sm font-bold text-slate-900">{generatedReportTemplateName}</span>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="w-20 shrink-0 text-xs font-bold text-slate-400">报告状态：</span>
+              <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${reportSummaryStatusClass}`}>
+                <CheckCircle2 size={13} />
+                {reportSummaryStatusLabel}
+              </div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="w-20 shrink-0 text-xs font-bold text-slate-400">报告名称：</span>
+              <span className="min-w-0 truncate text-sm font-bold text-slate-900">{generatedReportName}</span>
+            </div>
+          </div>
+
+          {reportSummaryStatus === "generated" ? (
+            <div className="mt-4 flex flex-nowrap items-center gap-3 overflow-x-auto">
+              <button
+                type="button"
+                onClick={openGeneratedReport}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+              >
+                <Eye size={15} />
+                查看报告
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReportGenerationPanel(true)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+              >
+                <Clock size={15} />
+                查看生成过程
+              </button>
+              <button
+                type="button"
+                onClick={startReportGeneration}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+              >
+                <RefreshCw size={15} />
+                重新生成
+              </button>
+              <button
+                type="button"
+                onClick={downloadGeneratedReport}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+              >
+                <Download size={15} />
+                下载报告
+              </button>
+            </div>
+          ) : reportSummaryStatus === "generating" ? (
+            <div className="mt-4 flex flex-nowrap items-center gap-3">
+              <button
+                type="button"
+                disabled
+                className="inline-flex shrink-0 cursor-wait items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-600"
+              >
+                <RefreshCw size={15} className="animate-spin" />
+                生成中
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReportGenerationPanel(true)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+              >
+                <Clock size={15} />
+                查看生成过程
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-nowrap items-center gap-3">
+              <button
+                type="button"
+                onClick={startReportGeneration}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700"
+              >
+                <Sparkles size={15} />
+                立即生成
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   ) : null;
