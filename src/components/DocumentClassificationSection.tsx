@@ -656,11 +656,11 @@ export const DocumentClassificationSection = ({
     activeClassName: string;
   }> = [
     {
-      key: 'failed',
-      label: '失败',
-      count: statusCounts.failed,
-      dotClassName: 'bg-red-400',
-      activeClassName: 'bg-red-50 text-red-600',
+      key: 'all',
+      label: '全部',
+      count: statusCounts.total,
+      dotClassName: 'bg-gray-400',
+      activeClassName: 'bg-gray-100 text-gray-700',
     },
     {
       key: 'success',
@@ -677,11 +677,11 @@ export const DocumentClassificationSection = ({
       activeClassName: 'bg-amber-50 text-amber-700',
     },
     {
-      key: 'all',
-      label: '总数',
-      count: statusCounts.total,
-      dotClassName: 'bg-gray-400',
-      activeClassName: 'bg-gray-100 text-gray-700',
+      key: 'failed',
+      label: '失败',
+      count: statusCounts.failed,
+      dotClassName: 'bg-red-400',
+      activeClassName: 'bg-red-50 text-red-600',
     },
   ];
   const emptyFileMessage =
