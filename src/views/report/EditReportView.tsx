@@ -27,6 +27,8 @@ import {
   FileSpreadsheet,
   FileAudio,
   FileText as FileIcon,
+  Folder,
+  FolderOpen,
   CheckCircle2,
   Check,
   Layout,
@@ -163,8 +165,30 @@ const RuleDataSourceTreeSelect = ({
   onChange: (nextValue: string) => void;
 }) => {
   const [open, setOpen] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    () => new Set(REPORT_RULE_DATA_SOURCE_TREE.map((group) => group.group)),
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedItems = parseRuleDataSources(value);
+  const normalizedSearchKeyword = searchKeyword.trim().toLocaleLowerCase();
+  const filteredGroups = REPORT_RULE_DATA_SOURCE_TREE
+    .map((group) => {
+      if (!normalizedSearchKeyword) return group;
+
+      const groupMatches = group.group.toLocaleLowerCase().includes(normalizedSearchKeyword);
+      const matchedChildren = group.children.filter((item) =>
+        item.toLocaleLowerCase().includes(normalizedSearchKeyword),
+      );
+
+      return groupMatches
+        ? group
+        : {
+            ...group,
+            children: matchedChildren,
+          };
+    })
+    .filter((group) => group.children.length > 0);
 
   useEffect(() => {
     if (!open) return;
@@ -199,6 +223,18 @@ const RuleDataSourceTreeSelect = ({
     onChange(formatRuleDataSources(Array.from(selectedSet)));
   };
 
+  const toggleGroupExpanded = (groupName: string) => {
+    setExpandedGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(groupName)) {
+        next.delete(groupName);
+      } else {
+        next.add(groupName);
+      }
+      return next;
+    });
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -223,48 +259,105 @@ const RuleDataSourceTreeSelect = ({
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-          {REPORT_RULE_DATA_SOURCE_TREE.map((group) => {
-            const allSelected = group.children.every((item) => selectedItems.includes(item));
-            const partialSelected = group.children.some((item) => selectedItems.includes(item));
+        <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+          <div className="border-b border-slate-100 p-3">
+            <div className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 transition-colors focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
+              <input
+                type="search"
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="搜索数据来源"
+                className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+              />
+              <Search size={15} className="shrink-0 text-slate-400" />
+            </div>
+          </div>
 
-            return (
-              <div key={group.group} className="rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => toggleDataSourceGroup(group.children)}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors ${
-                    partialSelected ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span>{group.group}</span>
-                  {allSelected ? (
-                    <Check size={15} />
-                  ) : partialSelected ? (
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                  ) : null}
-                </button>
-                <div className="ml-3 border-l border-slate-100 py-1 pl-3">
-                  {group.children.map((option) => {
-                    const checked = selectedItems.includes(option);
-                    return (
+          <div className="max-h-72 overflow-y-auto p-2">
+            {filteredGroups.length ? (
+              filteredGroups.map((group) => {
+                const originalGroup = REPORT_RULE_DATA_SOURCE_TREE.find((item) => item.group === group.group) ?? group;
+                const allSelected = originalGroup.children.every((item) => selectedItems.includes(item));
+                const partialSelected = originalGroup.children.some((item) => selectedItems.includes(item));
+                const expanded = normalizedSearchKeyword ? true : expandedGroups.has(group.group);
+
+                return (
+                  <div key={group.group} className="rounded-xl">
+                    <div
+                      className={`flex items-center rounded-xl transition-colors ${
+                        partialSelected ? "bg-blue-50/70" : "hover:bg-slate-50"
+                      }`}
+                    >
                       <button
-                        key={option}
                         type="button"
-                        onClick={() => toggleDataSource(option)}
-                        className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm transition-colors ${
-                          checked ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                        onClick={() => toggleGroupExpanded(group.group)}
+                        className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-semibold ${
+                          partialSelected ? "text-blue-700" : "text-slate-700"
                         }`}
                       >
-                        <span>{option}</span>
-                        {checked && <Check size={14} />}
+                        <ChevronRight
+                          size={15}
+                          className={`shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`}
+                        />
+                        {expanded ? (
+                          <FolderOpen size={16} className="shrink-0 text-blue-500" />
+                        ) : (
+                          <Folder size={16} className="shrink-0 text-slate-400" />
+                        )}
+                        <span className="truncate">{group.group}</span>
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+                      <button
+                        type="button"
+                        onClick={() => toggleDataSourceGroup(originalGroup.children)}
+                        className={`mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                          partialSelected
+                            ? "text-blue-600 hover:bg-blue-100"
+                            : "text-slate-300 hover:bg-slate-100 hover:text-slate-500"
+                        }`}
+                        title={allSelected ? "取消选择该目录" : "选择该目录全部数据源"}
+                      >
+                        {allSelected ? (
+                          <Check size={15} />
+                        ) : partialSelected ? (
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                        ) : (
+                          <span className="h-3.5 w-3.5 rounded border border-current" />
+                        )}
+                      </button>
+                    </div>
+
+                    {expanded && (
+                      <div className="ml-5 border-l border-slate-100 py-1 pl-3">
+                        {group.children.map((option) => {
+                          const checked = selectedItems.includes(option);
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => toggleDataSource(option)}
+                              className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                                checked
+                                  ? "bg-blue-50 text-blue-700"
+                                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                              }`}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <FileIcon size={15} className={`shrink-0 ${checked ? "text-blue-500" : "text-slate-400"}`} />
+                                <span className="truncate">{option}</span>
+                              </span>
+                              {checked && <Check size={15} className="shrink-0 text-blue-600" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="px-3 py-8 text-center text-sm text-slate-400">未找到匹配的数据来源</div>
+            )}
+          </div>
         </div>
       )}
     </div>
