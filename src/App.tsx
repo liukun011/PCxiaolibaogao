@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef, useState } from "react";
-import { DocumentClassificationSection } from './components/DocumentClassificationSection';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { MaterialDirectorySnapshot } from './components/DocumentClassificationSection';
 import {
   LayoutDashboard,
   FileText,
@@ -114,6 +114,7 @@ export default function App() {
   const initialUrlParams = new URLSearchParams(window.location.search);
   const requestedView = initialUrlParams.get("view");
   const requestedTemplateId = initialUrlParams.get("templateId");
+  const requestedReportId = initialUrlParams.get("reportId");
   const requestedReportTitle = initialUrlParams.get("reportTitle");
   const requestedCompanyName = initialUrlParams.get("companyName");
   const requestedReportStatus = initialUrlParams.get("reportStatus");
@@ -175,9 +176,28 @@ export default function App() {
   const [isBackgroundAnalyzing, setIsBackgroundAnalyzing] = useState(false);
   const [hasBackgroundResult, setHasBackgroundResult] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [materialSnapshotsByReportId, setMaterialSnapshotsByReportId] = useState<
+    Record<string, MaterialDirectorySnapshot>
+  >({});
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
+  const currentMaterialSnapshot = requestedReportId
+    ? materialSnapshotsByReportId[requestedReportId] ?? null
+    : null;
+  const handleMaterialSnapshotChange = useCallback(
+    (snapshot: MaterialDirectorySnapshot) => {
+      if (!requestedReportId) {
+        return;
+      }
+
+      setMaterialSnapshotsByReportId((previous) => ({
+        ...previous,
+        [requestedReportId]: snapshot,
+      }));
+    },
+    [requestedReportId],
+  );
 
   const handlePlayToggle = () => setIsPlaying(!isPlaying);
   const scrollToTranscript = (startTime: number) => {
@@ -563,6 +583,8 @@ export default function App() {
             setQuestionCollections={setQuestionCollections}
             templates={templates}
             onPreviewTemplate={openTemplateInNewTab}
+            materialSnapshot={currentMaterialSnapshot}
+            onMaterialSnapshotChange={handleMaterialSnapshotChange}
           />
         )}
 
@@ -616,6 +638,7 @@ export default function App() {
             onDownloadConflict={handleDownloadConflictDocx}
             onDownloadTraceability={handleDownloadTraceabilityDocx}
             intelligenceResult={intelligenceResult}
+            materialSnapshot={currentMaterialSnapshot}
             initialSideTab={editInitialTab}
             templates={templates}
             setTemplates={setTemplates}

@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CheckSquare,
   Eye,
   FileText,
   FolderPlus,
@@ -16,7 +15,6 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Square,
   Tag,
   Trash2,
   Upload,
@@ -30,12 +28,25 @@ import {
   updateKnowledgeDocument,
 } from '../utils/documentKnowledge';
 
+export type MaterialDirectoryNode = {
+  name: string;
+  path: string;
+  children: MaterialDirectoryNode[];
+};
+
+export type MaterialDirectorySnapshot = {
+  folders: MaterialDirectoryNode[];
+  files: KnowledgeDocument[];
+};
+
 type DocumentClassificationSectionProps = {
   sectionNumber: number;
   title: string;
   hideHeader?: boolean;
   hideFileDetails?: boolean;
   onFilesStateChange?: (hasFiles: boolean) => void;
+  materialSnapshot?: MaterialDirectorySnapshot | null;
+  onMaterialSnapshotChange?: (snapshot: MaterialDirectorySnapshot) => void;
   initialFiles?: Array<{
     name: string;
     path: string;
@@ -69,6 +80,7 @@ type FileRenameDialogState = {
 };
 
 type UploadMode = 'files' | 'directory';
+type StatusFilter = 'all' | 'failed' | 'success' | 'parsing';
 
 type UploadOptions = {
   sectionRoot?: string;
@@ -121,17 +133,14 @@ type FileSystemDirectoryHandleLike = {
   entries: () => AsyncIterable<[string, FileSystemFileHandleLike | FileSystemDirectoryHandleLike]>;
 };
 
-type FolderTreeNodeData = {
-  name: string;
-  path: string;
-  children: FolderTreeNodeData[];
-};
+type FolderTreeNodeData = MaterialDirectoryNode;
 
 const DEFAULT_UPLOAD_FOLDER = '企业资料';
 const LEGACY_UPLOAD_FOLDER = '上传文件';
 const INTERVIEW_FOLDER = '访谈录音';
 const NOTE_FOLDER = '笔记';
-const DEFAULT_MATERIAL_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER];
+export const MATERIAL_ROOT_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER] as const;
+const DEFAULT_MATERIAL_FOLDERS: string[] = [...MATERIAL_ROOT_FOLDERS];
 const DEFAULT_MOCK_TIMES = ['2026-04-18 09:32', '2026-04-18 10:16', '2026-04-18 11:05'];
 const UPLOAD_BATCH_SIZE = 35;
 const UPLOAD_BATCH_DELAY_MS = 520;
@@ -164,6 +173,20 @@ const getFolderName = (path: string) => path.split('/').filter(Boolean).at(-1) ?
 const getParentPath = (path: string) => {
   const segments = path.split('/').filter(Boolean);
   return segments.slice(0, -1).join('/');
+};
+
+const isFileInFolderScope = (file: KnowledgeDocument, folderPath: string) => {
+  const normalizedFolderPath = normalizeFolderPath(folderPath);
+  const normalizedDirectoryPath = normalizeFolderPath(file.directoryPath);
+
+  if (!normalizedFolderPath) {
+    return true;
+  }
+
+  return (
+    normalizedDirectoryPath === normalizedFolderPath ||
+    normalizedDirectoryPath.startsWith(`${normalizedFolderPath}/`)
+  );
 };
 
 const collectAncestorPaths = (path: string) => {
@@ -249,6 +272,9 @@ const buildFolderTreeData = (folderPaths: string[]): FolderTreeNodeData[] => {
 
   return sortNodes(root);
 };
+
+const flattenFolderTreePaths = (nodes: MaterialDirectoryNode[]): string[] =>
+  nodes.flatMap((node) => [node.path, ...flattenFolderTreePaths(node.children)]);
 
 const buildBreadcrumbs = (path: string) => {
   const normalized = normalizeFolderPath(path);
@@ -499,12 +525,20 @@ export const DocumentClassificationSection = ({
   hideHeader = false,
   hideFileDetails = false,
   onFilesStateChange,
+  materialSnapshot,
+  onMaterialSnapshotChange,
   initialFiles = [],
 }: DocumentClassificationSectionProps) => {
   const initialDocuments = useMemo(() => normalizeInitialFiles(initialFiles), [initialFiles]);
-  const [files, setFiles] = useState<KnowledgeDocument[]>(initialDocuments);
-  const [folderPaths, setFolderPaths] = useState<string[]>(
-    mergeFolderPaths(DEFAULT_MATERIAL_FOLDERS, initialDocuments.map((file) => file.directoryPath)),
+  const [files, setFiles] = useState<KnowledgeDocument[]>(
+    () => materialSnapshot?.files.map((file) => ({ ...file })) ?? initialDocuments,
+  );
+  const [folderPaths, setFolderPaths] = useState<string[]>(() =>
+    mergeFolderPaths(
+      DEFAULT_MATERIAL_FOLDERS,
+      materialSnapshot ? flattenFolderTreePaths(materialSnapshot.folders) : [],
+      (materialSnapshot?.files ?? initialDocuments).map((file) => file.directoryPath),
+    ),
   );
   const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -514,12 +548,13 @@ export const DocumentClassificationSection = ({
   const [pendingUpload, setPendingUpload] = useState<PendingUploadState | null>(null);
   const [isReparsingFailedFiles, setIsReparsingFailedFiles] = useState(false);
   const [showParseFailuresPopover, setShowParseFailuresPopover] = useState(false);
-  const [showDirectoryFailuresPopover, setShowDirectoryFailuresPopover] = useState(false);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilter>('all');
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [addingTagId, setAddingTagId] = useState<string | null>(null);
   const [editingTag, setEditingTag] = useState<{ fileId: string; tag: string } | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [visibleFileLimit, setVisibleFileLimit] = useState(FILES_PAGE_SIZE);
-  const [selectedBatchFileIds, setSelectedBatchFileIds] = useState<string[]>([]);
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const [folderNameInput, setFolderNameInput] = useState('');
   const [folderDialogError, setFolderDialogError] = useState('');
@@ -534,14 +569,10 @@ export const DocumentClassificationSection = ({
   const selectedFolderRef = useRef(selectedFolder);
   const currentUploadTargetRef = useRef<string>(DEFAULT_UPLOAD_FOLDER);
   const parseFailuresPopoverTimerRef = useRef<number | null>(null);
-  const directoryFailuresPopoverTimerRef = useRef<number | null>(null);
   const uploadProgressDismissTimerRef = useRef<number | null>(null);
   const uploadSummaryDismissTimerRef = useRef<number | null>(null);
   const uploadJobSequenceRef = useRef(0);
   const activeUploadJobRef = useRef<{ id: number; cancelled: boolean } | null>(null);
-  const pendingVisibleFileLimitRef = useRef<number | null>(null);
-  const pendingScrollFileIdRef = useRef<string | null>(null);
-  const fileRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     selectedFolderRef.current = selectedFolder;
@@ -551,9 +582,6 @@ export const DocumentClassificationSection = ({
     return () => {
       if (parseFailuresPopoverTimerRef.current) {
         window.clearTimeout(parseFailuresPopoverTimerRef.current);
-      }
-      if (directoryFailuresPopoverTimerRef.current) {
-        window.clearTimeout(directoryFailuresPopoverTimerRef.current);
       }
       if (uploadProgressDismissTimerRef.current) {
         window.clearTimeout(uploadProgressDismissTimerRef.current);
@@ -573,32 +601,45 @@ export const DocumentClassificationSection = ({
         .sort(compareFolderPath),
     [folderPaths, selectedFolder],
   );
+  const statusScopeFiles = useMemo(
+    () => {
+      const scopedFiles = files.filter((file) => isFileInFolderScope(file, selectedFolder));
+
+      return [...scopedFiles].sort((left, right) =>
+        left.title.localeCompare(right.title, 'zh-CN'),
+      );
+    },
+    [files, selectedFolder],
+  );
+  const statusCounts = useMemo(
+    () => ({
+      failed: statusScopeFiles.filter((file) => file.parseStatus === 'failed').length,
+      success: statusScopeFiles.filter((file) => file.parseStatus === 'success').length,
+      parsing: statusScopeFiles.filter((file) => String(file.parseStatus) === 'parsing').length,
+      total: statusScopeFiles.length,
+    }),
+    [statusScopeFiles],
+  );
   const currentFiles = useMemo(
     () =>
-      (groupedFiles[selectedFolder] ?? []).sort((left, right) =>
-        left.title.localeCompare(right.title, 'zh-CN'),
-      ),
-    [groupedFiles, selectedFolder],
+      activeStatusFilter === 'all'
+        ? statusScopeFiles
+        : statusScopeFiles.filter((file) => String(file.parseStatus) === activeStatusFilter),
+    [activeStatusFilter, statusScopeFiles],
   );
   const visibleCurrentFiles = useMemo(
     () => currentFiles.slice(0, visibleFileLimit),
     [currentFiles, visibleFileLimit],
   );
-  const visibleDeletableFileIds = useMemo(
-    () =>
-      visibleCurrentFiles
-        .filter((file) => file.sourceKind !== 'interview')
-        .map((file) => file.id),
-    [visibleCurrentFiles],
-  );
-  const selectedVisibleBatchFileIds = useMemo(
-    () => selectedBatchFileIds.filter((fileId) => visibleDeletableFileIds.includes(fileId)),
-    [selectedBatchFileIds, visibleDeletableFileIds],
-  );
-  const isAllVisibleFilesSelected =
-    visibleDeletableFileIds.length > 0 &&
-    selectedVisibleBatchFileIds.length === visibleDeletableFileIds.length;
   const hasMoreCurrentFiles = visibleCurrentFiles.length < currentFiles.length;
+  const selectedFileIdSet = useMemo(() => new Set(selectedFileIds), [selectedFileIds]);
+  const currentFileIds = useMemo(
+    () => currentFiles.filter((file) => file.sourceKind !== 'interview').map((file) => file.id),
+    [currentFiles],
+  );
+  const selectedCurrentFileCount = currentFileIds.filter((fileId) => selectedFileIdSet.has(fileId)).length;
+  const areAllCurrentFilesSelected = currentFileIds.length > 0 && selectedCurrentFileCount === currentFileIds.length;
+  const isSomeCurrentFilesSelected = selectedCurrentFileCount > 0 && !areAllCurrentFilesSelected;
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
   const breadcrumbs = useMemo(() => buildBreadcrumbs(selectedFolder), [selectedFolder]);
   const isInterviewFolderSelected = selectedFolder.split('/').filter(Boolean)[0] === INTERVIEW_FOLDER;
@@ -607,45 +648,103 @@ export const DocumentClassificationSection = ({
     () => files.filter((file) => file.parseStatus === 'failed'),
     [files],
   );
+  const statusFilterItems: Array<{
+    key: StatusFilter;
+    label: string;
+    count: number;
+    dotClassName: string;
+    activeClassName: string;
+  }> = [
+    {
+      key: 'failed',
+      label: '失败',
+      count: statusCounts.failed,
+      dotClassName: 'bg-red-400',
+      activeClassName: 'bg-red-50 text-red-600',
+    },
+    {
+      key: 'success',
+      label: '成功',
+      count: statusCounts.success,
+      dotClassName: 'bg-emerald-500',
+      activeClassName: 'bg-emerald-50 text-emerald-700',
+    },
+    {
+      key: 'parsing',
+      label: '解析中',
+      count: statusCounts.parsing,
+      dotClassName: 'bg-amber-400',
+      activeClassName: 'bg-amber-50 text-amber-700',
+    },
+    {
+      key: 'all',
+      label: '总数',
+      count: statusCounts.total,
+      dotClassName: 'bg-gray-400',
+      activeClassName: 'bg-gray-100 text-gray-700',
+    },
+  ];
+  const emptyFileMessage =
+    activeStatusFilter === 'failed'
+      ? '当前目录下暂无失败文件'
+      : activeStatusFilter === 'success'
+        ? '当前目录下暂无成功文件'
+        : activeStatusFilter === 'parsing'
+          ? '当前目录下暂无解析中文件'
+          : '当前目录下还没有文件，可继续上传资料或新建子目录。';
 
   useEffect(() => {
-    if (selectedFileId && !files.some((file) => file.id === selectedFileId)) {
+    if (selectedFileId && !currentFiles.some((file) => file.id === selectedFileId)) {
       setSelectedFileId(null);
     }
-    setSelectedBatchFileIds((previous) => previous.filter((fileId) => files.some((file) => file.id === fileId)));
-  }, [files, selectedFileId]);
+  }, [currentFiles, selectedFileId]);
 
   useEffect(() => {
     onFilesStateChange?.(files.length > 0);
   }, [files, onFilesStateChange]);
 
   useEffect(() => {
-    const pendingVisibleFileLimit = pendingVisibleFileLimitRef.current;
-    if (pendingVisibleFileLimit !== null) {
-      setVisibleFileLimit(Math.max(FILES_PAGE_SIZE, pendingVisibleFileLimit));
-      pendingVisibleFileLimitRef.current = null;
-      return;
-    }
-
-    setVisibleFileLimit(FILES_PAGE_SIZE);
-    setSelectedBatchFileIds([]);
-  }, [files.length, selectedFolder]);
+    onMaterialSnapshotChange?.({
+      folders: folderTree,
+      files,
+    });
+  }, [files, folderTree, onMaterialSnapshotChange]);
 
   useEffect(() => {
-    if (!selectedFileId || pendingScrollFileIdRef.current !== selectedFileId) {
+    setSelectedFileIds([]);
+  }, [activeStatusFilter, selectedFolder]);
+
+  useEffect(() => {
+    setSelectedFileIds((previous) => previous.filter((fileId) => files.some((file) => file.id === fileId)));
+  }, [files]);
+
+  useEffect(() => {
+    if (!showDeleteConfirmModal) {
       return;
     }
 
-    const selectedRow = fileRowRefs.current[selectedFileId];
-    if (!selectedRow) {
-      return;
-    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowDeleteConfirmModal(false);
+      }
+    };
 
-    window.requestAnimationFrame(() => {
-      selectedRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      pendingScrollFileIdRef.current = null;
-    });
-  }, [selectedFileId, visibleCurrentFiles]);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showDeleteConfirmModal]);
+
+  useEffect(() => {
+    if (showDeleteConfirmModal && selectedCurrentFileCount === 0) {
+      setShowDeleteConfirmModal(false);
+    }
+  }, [selectedCurrentFileCount, showDeleteConfirmModal]);
+
+  useEffect(() => {
+    setVisibleFileLimit(FILES_PAGE_SIZE);
+  }, [activeStatusFilter, files.length, selectedFolder]);
 
   const openCreateFolderDialog = (parentPath: string) => {
     setFolderDialog({
@@ -1190,63 +1289,70 @@ export const DocumentClassificationSection = ({
 
     setFiles((previous) => previous.filter((file) => file.id !== fileId));
     setAddingTagId((previous) => (previous === fileId ? null : previous));
+    setSelectedFileIds((previous) => previous.filter((selectedId) => selectedId !== fileId));
     setSelectedFileId((previous) => (previous === fileId ? null : previous));
-    setSelectedBatchFileIds((previous) => previous.filter((currentFileId) => currentFileId !== fileId));
   };
 
-  const toggleBatchFileSelection = (fileId: string) => {
-    const targetFile = files.find((file) => file.id === fileId);
-    if (targetFile?.sourceKind === 'interview') {
+  const toggleFileSelection = (fileId: string) => {
+    if (files.find((file) => file.id === fileId)?.sourceKind === 'interview') {
       return;
     }
 
-    setSelectedBatchFileIds((previous) =>
+    setSelectedFileIds((previous) =>
       previous.includes(fileId)
-        ? previous.filter((currentFileId) => currentFileId !== fileId)
+        ? previous.filter((selectedId) => selectedId !== fileId)
         : [...previous, fileId],
     );
   };
 
-  const toggleSelectVisibleFiles = () => {
-    if (visibleDeletableFileIds.length === 0) {
-      return;
-    }
+  const toggleCurrentFilesSelection = () => {
+    setSelectedFileIds((previous) => {
+      const nextSelectedFileIds = new Set(previous);
 
-    setSelectedBatchFileIds((previous) => {
-      if (isAllVisibleFilesSelected) {
-        return previous.filter((fileId) => !visibleDeletableFileIds.includes(fileId));
+      if (areAllCurrentFilesSelected) {
+        currentFileIds.forEach((fileId) => nextSelectedFileIds.delete(fileId));
+      } else {
+        currentFileIds.forEach((fileId) => nextSelectedFileIds.add(fileId));
       }
 
-      return Array.from(new Set([...previous, ...visibleDeletableFileIds]));
+      return Array.from(nextSelectedFileIds);
     });
   };
 
-  const deleteSelectedFiles = () => {
-    const deletableSelectedFileIds = selectedBatchFileIds.filter((fileId) => {
-      const targetFile = files.find((file) => file.id === fileId);
-      return targetFile?.sourceKind !== 'interview';
-    });
-
-    if (deletableSelectedFileIds.length === 0) {
+  const openDeleteSelectedConfirm = () => {
+    if (selectedCurrentFileCount === 0) {
+      setSelectedFileIds([]);
       return;
     }
 
-    const shouldDelete = window.confirm(
-      `确定删除已选的 ${deletableSelectedFileIds.length} 个文件吗？删除后将无法恢复。`,
-    );
+    setShowDeleteConfirmModal(true);
+  };
 
-    if (!shouldDelete) {
+  const closeDeleteSelectedConfirm = () => {
+    setShowDeleteConfirmModal(false);
+  };
+
+  const confirmDeleteSelectedFiles = () => {
+    const selectedFileIdLookup = new Set(selectedFileIds);
+    const selectedFilesInCurrentDirectory = currentFiles.filter((file) => selectedFileIdLookup.has(file.id));
+
+    if (selectedFilesInCurrentDirectory.length === 0) {
+      setSelectedFileIds([]);
+      closeDeleteSelectedConfirm();
       return;
     }
 
-    const deletableSelectedFileIdSet = new Set(deletableSelectedFileIds);
-    setFiles((previous) => previous.filter((file) => !deletableSelectedFileIdSet.has(file.id)));
-    setAddingTagId((previous) => (previous && deletableSelectedFileIdSet.has(previous) ? null : previous));
-    setEditingTag((previous) =>
-      previous && deletableSelectedFileIdSet.has(previous.fileId) ? null : previous,
+    const selectedCurrentDirectoryFileIds = new Set(selectedFilesInCurrentDirectory.map((file) => file.id));
+
+    setFiles((previous) => previous.filter((file) => !selectedCurrentDirectoryFileIds.has(file.id)));
+    setAddingTagId((previous) =>
+      previous && selectedCurrentDirectoryFileIds.has(previous) ? null : previous,
     );
-    setSelectedFileId((previous) => (previous && deletableSelectedFileIdSet.has(previous) ? null : previous));
-    setSelectedBatchFileIds([]);
+    setSelectedFileId((previous) =>
+      previous && selectedCurrentDirectoryFileIds.has(previous) ? null : previous,
+    );
+    setSelectedFileIds([]);
+    closeDeleteSelectedConfirm();
   };
 
   const toggleAudioPlayback = (fileId: string) => {
@@ -1385,41 +1491,6 @@ export const DocumentClassificationSection = ({
     }, 220);
   };
 
-  const openDirectoryFailuresPopover = () => {
-    if (directoryFailuresPopoverTimerRef.current) {
-      window.clearTimeout(directoryFailuresPopoverTimerRef.current);
-      directoryFailuresPopoverTimerRef.current = null;
-    }
-    setShowDirectoryFailuresPopover(true);
-  };
-
-  const closeDirectoryFailuresPopover = () => {
-    if (directoryFailuresPopoverTimerRef.current) {
-      window.clearTimeout(directoryFailuresPopoverTimerRef.current);
-    }
-
-    directoryFailuresPopoverTimerRef.current = window.setTimeout(() => {
-      setShowDirectoryFailuresPopover(false);
-      directoryFailuresPopoverTimerRef.current = null;
-    }, 220);
-  };
-
-  const jumpToFailedFile = (file: KnowledgeDocument) => {
-    const targetFolderFiles = [...(groupedFiles[file.directoryPath] ?? [])].sort((left, right) =>
-      left.title.localeCompare(right.title, 'zh-CN'),
-    );
-    const targetFileIndex = targetFolderFiles.findIndex((currentFile) => currentFile.id === file.id);
-    const nextVisibleFileLimit =
-      targetFileIndex >= 0 ? Math.max(FILES_PAGE_SIZE, targetFileIndex + 1) : FILES_PAGE_SIZE;
-
-    pendingVisibleFileLimitRef.current = nextVisibleFileLimit;
-    pendingScrollFileIdRef.current = file.id;
-    setSelectedFolder(file.directoryPath);
-    setVisibleFileLimit(nextVisibleFileLimit);
-    setSelectedFileId(file.id);
-    openDirectoryFailuresPopover();
-  };
-
   const submitTag = (fileId: string) => {
     if (tagInput.trim()) {
       setFiles((previous) =>
@@ -1553,74 +1624,24 @@ export const DocumentClassificationSection = ({
               <div className="mb-2 space-y-2 border-b border-gray-100 pb-3">
                 <div className="text-sm font-bold text-gray-800">文件目录</div>
                 <div className="flex flex-nowrap items-center gap-2 text-[11px] font-medium text-gray-400">
-                  <div
-                    className="relative shrink-0"
-                    onMouseEnter={openDirectoryFailuresPopover}
-                    onMouseLeave={closeDirectoryFailuresPopover}
-                    onFocus={openDirectoryFailuresPopover}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setShowDirectoryFailuresPopover((previous) => !previous)}
-                      className="flex items-center gap-0.5 whitespace-nowrap rounded px-0.5 py-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <span className="h-1 w-1 rounded-full bg-red-400" />
-                      失败 {failedFiles.length}
-                    </button>
+                  {statusFilterItems.map((item) => {
+                    const isActive = activeStatusFilter === item.key;
 
-                    <div
-                      className={`absolute left-0 top-[calc(100%+8px)] z-30 w-[240px] rounded-xl border border-gray-200 bg-white p-3 text-left shadow-xl transition-all ${
-                        showDirectoryFailuresPopover
-                          ? 'visible pointer-events-auto opacity-100'
-                          : 'invisible pointer-events-none opacity-0'
+                    return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setActiveStatusFilter(item.key)}
+                      className={`flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded px-1 py-0.5 transition-colors hover:bg-gray-50 hover:text-gray-700 ${
+                        isActive ? `${item.activeClassName} font-bold` : ''
                       }`}
+                      aria-pressed={isActive}
                     >
-                      <div className="absolute -top-2 left-6 h-4 w-4 rotate-45 border-l border-t border-gray-200 bg-white" />
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 truncate text-[11px] font-bold text-gray-800">
-                          {failedFiles.length > 0 ? `解析失败文件 (${failedFiles.length})` : '暂无解析失败文件'}
-                        </div>
-                        {failedFiles.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={reparseFailedFiles}
-                            disabled={isReparsingFailedFiles}
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:cursor-wait disabled:text-gray-300 disabled:hover:bg-transparent"
-                            title={isReparsingFailedFiles ? '重新解析中' : '重新解析'}
-                            aria-label={isReparsingFailedFiles ? '重新解析中' : '重新解析失败文件'}
-                          >
-                            <RefreshCw size={14} className={isReparsingFailedFiles ? 'animate-spin' : ''} />
-                          </button>
-                        )}
-                      </div>
-                      {failedFiles.length > 0 && (
-                        <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
-                          {failedFiles.map((file) => (
-                            <button
-                              key={file.id}
-                              type="button"
-                              onClick={() => jumpToFailedFile(file)}
-                              className="block w-full rounded-lg bg-red-50/80 px-2.5 py-2 text-left transition-colors hover:bg-red-100"
-                            >
-                              <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
-                    成功 8
-                  </span>
-                  <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                    <span className="h-1 w-1 rounded-full bg-amber-400" />
-                    解析中 2
-                  </span>
-                  <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                    <span className="h-1 w-1 rounded-full bg-gray-400" />
-                    总数 12
-                  </span>
+                      <span className={`h-1 w-1 rounded-full ${item.dotClassName}`} />
+                      {item.label} {item.count}
+                    </button>
+                    );
+                  })}
                 </div>
               </div>
               {folderTree.map((node) => (
@@ -1673,20 +1694,20 @@ export const DocumentClassificationSection = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {currentFiles.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={deleteSelectedFiles}
-                      disabled={selectedBatchFileIds.length === 0}
-                      className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
-                        selectedBatchFileIds.length === 0
-                          ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
-                          : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                      }`}
-                    >
-                      <Trash2 size={13} />
-                      删除已选{selectedBatchFileIds.length > 0 ? ` ${selectedBatchFileIds.length}` : ''}
-                    </button>
+                  {currentFiles.length > 0 && selectedCurrentFileCount > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-400">
+                        已选 {selectedCurrentFileCount} 项
+                      </span>
+                      <button
+                        type="button"
+                        onClick={openDeleteSelectedConfirm}
+                        className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600 transition-all hover:bg-red-50"
+                      >
+                        <Trash2 size={13} />
+                        删除所选
+                      </button>
+                    </div>
                   )}
                   {!isInterviewFolderSelected && (
                     <div
@@ -1823,17 +1844,21 @@ export const DocumentClassificationSection = ({
 
               {currentFiles.length > 0 ? (
                 <div className="px-3 py-2">
-                  <div className="grid grid-cols-[34px_minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    <button
-                      type="button"
-                      onClick={toggleSelectVisibleFiles}
-                      disabled={visibleDeletableFileIds.length === 0}
-                      className="flex h-6 w-6 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
-                      title={isAllVisibleFilesSelected ? '取消全选' : '全选当前可删文件'}
-                      aria-label={isAllVisibleFilesSelected ? '取消全选当前可删文件' : '全选当前可删文件'}
-                    >
-                      {isAllVisibleFilesSelected ? <CheckSquare size={15} /> : <Square size={15} />}
-                    </button>
+                  <div className="grid grid-cols-[28px_minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] gap-3 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    <label className="flex items-center justify-center" title="全选当前列表文件">
+                      <input
+                        type="checkbox"
+                        checked={areAllCurrentFilesSelected}
+                        ref={(element) => {
+                          if (element) {
+                            element.indeterminate = isSomeCurrentFilesSelected;
+                          }
+                        }}
+                        onChange={toggleCurrentFilesSelection}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
+                        aria-label="全选当前列表文件"
+                      />
+                    </label>
                     <span>名称</span>
                     <span>标签</span>
                     <span>上传时间</span>
@@ -1842,35 +1867,29 @@ export const DocumentClassificationSection = ({
 
                   {visibleCurrentFiles.map((file) => {
                     const isSelected = selectedFile?.id === file.id;
-                    const isBatchSelected = selectedBatchFileIds.includes(file.id);
-                    const canDeleteFile = file.sourceKind !== 'interview';
 
                     return (
                       <div
                         key={file.id}
-                        ref={(element) => {
-                          fileRowRefs.current[file.id] = element;
-                        }}
-                        className={`grid grid-cols-[34px_minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
+                        className={`grid grid-cols-[28px_minmax(0,1.6fr)_minmax(140px,0.9fr)_132px_104px] items-center gap-3 rounded-xl px-2 py-2 text-sm transition-all ${
                           isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => toggleBatchFileSelection(file.id)}
-                          disabled={!canDeleteFile}
-                          className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
-                            canDeleteFile
-                              ? isBatchSelected
-                                ? 'text-blue-600 hover:bg-blue-100'
-                                : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
-                              : 'cursor-not-allowed text-gray-200'
-                          }`}
-                          title={canDeleteFile ? (isBatchSelected ? '取消选择' : '选择文件') : '访谈文件不可删除'}
-                          aria-label={canDeleteFile ? (isBatchSelected ? '取消选择文件' : '选择文件') : '访谈文件不可删除'}
-                        >
-                          {isBatchSelected ? <CheckSquare size={15} /> : <Square size={15} />}
-                        </button>
+                        <label className="flex items-center justify-center" title={`选择 ${file.title}`}>
+                          <input
+                            type="checkbox"
+                            checked={selectedFileIdSet.has(file.id)}
+                            disabled={file.sourceKind === 'interview'}
+                            onChange={() => toggleFileSelection(file.id)}
+                            onClick={(event) => event.stopPropagation()}
+                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label={
+                              file.sourceKind === 'interview'
+                                ? `${file.title} 不可删除`
+                                : `选择 ${file.title}`
+                            }
+                          />
+                        </label>
                         <button
                           type="button"
                           onClick={() => setSelectedFileId(file.id)}
@@ -1992,7 +2011,7 @@ export const DocumentClassificationSection = ({
                           >
                             <Pencil size={13} />
                           </button>
-                          {canDeleteFile && (
+                          {file.sourceKind !== 'interview' && (
                             <button
                               type="button"
                               onClick={() => deleteFile(file.id)}
@@ -2022,7 +2041,7 @@ export const DocumentClassificationSection = ({
                 </div>
               ) : (
                 <div className="p-10 text-center text-sm text-gray-400">
-                  当前目录下还没有文件，可继续上传资料或新建子目录。
+                  {emptyFileMessage}
                 </div>
               )}
             </div>
@@ -2379,6 +2398,60 @@ export const DocumentClassificationSection = ({
                   知道了
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirmModal && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
+          onMouseDown={closeDeleteSelectedConfirm}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-selected-files-title"
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                <Trash2 size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 id="delete-selected-files-title" className="text-lg font-bold text-gray-900">
+                  确认删除文件
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  确定删除选中的 {selectedCurrentFileCount} 个文件吗？删除后将无法恢复。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteSelectedConfirm}
+                className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                aria-label="关闭"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteSelectedConfirm}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSelectedFiles}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700"
+              >
+                确认删除
+              </button>
             </div>
           </div>
         </div>

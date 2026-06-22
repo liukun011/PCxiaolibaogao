@@ -78,7 +78,10 @@ import {
   LineChart
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { DocumentClassificationSection } from "@/src/components/DocumentClassificationSection";
+import {
+  DocumentClassificationSection,
+  type MaterialDirectorySnapshot,
+} from "@/src/components/DocumentClassificationSection";
 import { DocxToolbar } from "@/src/components/DocxToolbar";
 import { MaterialPreviewDialog, type MaterialPreviewData } from "@/src/components/MaterialPreviewDialog";
 import { mockInterview, type InterviewRecord, type InterviewTranscript, type DDQuestion } from "@/src/types";
@@ -476,7 +479,7 @@ const REPORT_GENERATION_DETAILS: ReportGenerationDetail[] = [
     tone: "emerald",
   },
 ];
-export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, onOpenTemplates, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult, initialSection, onSectionHandled, questionCollections, setQuestionCollections, templates, onPreviewTemplate }: {
+export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal, onStartIntelligence, onStartBackgroundAI, onOpenTemplates, intelligenceResult, setIntelligenceResult, isBackgroundAnalyzing, hasBackgroundResult, onViewBackgroundResult, initialSection, onSectionHandled, questionCollections, setQuestionCollections, templates, onPreviewTemplate, materialSnapshot, onMaterialSnapshotChange }: {
   onBack: () => void,
   onEdit: () => void,
   onAudit: () => void,
@@ -496,6 +499,8 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
   setQuestionCollections: React.Dispatch<React.SetStateAction<QuestionCollection[]>>,
   templates: TemplateItem[],
   onPreviewTemplate: (template: TemplateItem) => void,
+  materialSnapshot?: MaterialDirectorySnapshot | null,
+  onMaterialSnapshotChange?: (snapshot: MaterialDirectorySnapshot) => void,
 }) => {
   const projectName = intelligenceResult?.companyName || "A公司";
   const dashboardProjectName = intelligenceResult?.projectName?.trim() || "未命名尽调项目";
@@ -1898,6 +1903,8 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
               hideHeader
               hideFileDetails
               onFilesStateChange={setHasDocumentMaterials}
+              materialSnapshot={materialSnapshot}
+              onMaterialSnapshotChange={onMaterialSnapshotChange}
               initialFiles={interviewMaterials}
             />
           </div>
