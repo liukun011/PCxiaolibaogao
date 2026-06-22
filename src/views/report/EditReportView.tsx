@@ -606,6 +606,7 @@ export const EditReportView = ({
   const [selectedGeneratedFieldId, setSelectedGeneratedFieldId] = useState<string | null>(null);
   const [selectedReportBlockId, setSelectedReportBlockId] = useState<string | null>(null);
   const [selectedRulePreviewFieldId, setSelectedRulePreviewFieldId] = useState<string | null>(null);
+  const [reportFieldDraftContent, setReportFieldDraftContent] = useState("");
   const [manualReportFieldContents, setManualReportFieldContents] = useState<Record<string, string>>({});
   const [reportBlockConfigs, setReportBlockConfigs] = useState<Record<string, ReportBlockConfig>>(() => ({
     schemeTable: {
@@ -1130,6 +1131,12 @@ export const EditReportView = ({
   const selectedGeneratedFieldContent = selectedGeneratedField
     ? manualReportFieldContents[selectedGeneratedField.id] ?? selectedGeneratedField.content
     : "";
+  const selectedGeneratedFieldDraftChanged =
+    Boolean(selectedGeneratedField) && reportFieldDraftContent !== selectedGeneratedFieldContent;
+
+  useEffect(() => {
+    setReportFieldDraftContent(selectedGeneratedFieldContent);
+  }, [selectedGeneratedFieldId, selectedGeneratedFieldContent]);
   const missingGeneratedFields = [
     {
       id: "taxRating",
@@ -1269,6 +1276,26 @@ export const EditReportView = ({
       previewContent: "",
       originalValue: currentValue,
       generatedValue: "",
+    });
+  };
+
+  const reopenRulePreviewFieldRuleModal = () => {
+    if (!selectedRulePreviewItem) return;
+
+    const previewBlock = reportBlockConfigs.schemeTable;
+    setSelectedRulePreviewFieldId(null);
+    setSelectedGeneratedFieldId(null);
+    setSelectedReportBlockId(previewBlock.id);
+    setActiveEditTargetId(`report-block-${previewBlock.id}`);
+    setReportBlockRuleModal({
+      isOpen: true,
+      blockId: previewBlock.id,
+      fieldName: previewBlock.name,
+      dataSource: previewBlock.dataSource,
+      extractionRule: previewBlock.extractionRule,
+      businessRule: previewBlock.businessRule,
+      previewContent: "",
+      previewRows: getReportBlockPreviewRows(previewBlock.id),
     });
   };
 
@@ -2915,10 +2942,14 @@ export const EditReportView = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">
-                    {selectedReportBlock ? "段落配置" : "AI 生成总览"}
+                    {selectedReportBlock ? "段落配置" : selectedGeneratedField ? "字段配置" : "AI 生成总览"}
                   </h3>
                   <p className="text-[11px] text-gray-500">
-                    {selectedReportBlock ? "显示这一段的数据来源与业务规则" : "字段来源、准确性、计算规则审查"}
+                    {selectedReportBlock
+                      ? "显示这一段的数据来源与业务规则"
+                      : selectedGeneratedField
+                        ? "显示这个字段的数据来源与业务规则"
+                        : "字段来源、准确性、计算规则审查"}
                   </p>
                 </div>
               </div>
@@ -3170,7 +3201,7 @@ export const EditReportView = ({
                       <label className="text-xs font-bold text-slate-700">报告内容</label>
                       {manualReportFieldContents[selectedGeneratedField.id] !== undefined && (
                         <button
-                          onClick={() => updateManualReportFieldContent(selectedGeneratedField.id, selectedGeneratedField.content)}
+                          onClick={() => setReportFieldDraftContent(selectedGeneratedField.content)}
                           className="rounded-lg px-2 py-1 text-[11px] font-bold text-blue-600 transition-colors hover:bg-blue-50"
                         >
                           恢复原文
@@ -3178,13 +3209,20 @@ export const EditReportView = ({
                       )}
                     </div>
                     <textarea
-                      value={selectedGeneratedFieldContent}
-                      onChange={(event) => updateManualReportFieldContent(selectedGeneratedField.id, event.target.value)}
+                      value={reportFieldDraftContent}
+                      onChange={(event) => setReportFieldDraftContent(event.target.value)}
                       className="min-h-[132px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
                     />
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
-                      修改会同步到左侧 Word 报告。冲突字段可在下方选择来源采纳。
-                    </p>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => updateManualReportFieldContent(selectedGeneratedField.id, reportFieldDraftContent)}
+                        disabled={!selectedGeneratedFieldDraftChanged}
+                        className="rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        确认修改
+                      </button>
+                    </div>
                   </div>
                 </section>
 
@@ -3401,6 +3439,13 @@ export const EditReportView = ({
 
               <div className="mt-6 flex justify-end gap-3">
                 <button
+                  type="button"
+                  onClick={reopenRulePreviewFieldRuleModal}
+                  className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
+                >
+                  重新设置规则
+                </button>
+                <button
                   onClick={() => setSelectedRulePreviewFieldId(null)}
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
@@ -3431,7 +3476,7 @@ export const EditReportView = ({
               initial={{ opacity: 0, y: 16, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl"
+              className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-3xl bg-white p-6 shadow-2xl"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -3529,8 +3574,32 @@ export const EditReportView = ({
                 </button>
               </div>
 
-              <div className="mt-5">
+              <div className="mt-5 min-h-0 overflow-y-auto pr-1">
                 <section className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Table size={15} className="shrink-0 text-blue-600" />
+                        <div className="min-w-0">
+                          <h4 className="truncate text-sm font-bold text-slate-900">规则影响范围</h4>
+                          <p className="mt-0.5 text-xs text-slate-500">当前规则将影响报告中这张表的数据生成口径</p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                        {reportBlockRuleModal.previewRows.length} 项数据
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto bg-white p-4">
+                      {reportBlockRuleModal.previewRows.length > 0 ? (
+                        renderReportBlockPreviewTable(reportBlockRuleModal.blockId, reportBlockRuleModal.previewRows)
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">
+                          暂未识别到这一段的报告表格数据
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <label className="block">
                     <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
                     <RuleDataSourceTreeSelect

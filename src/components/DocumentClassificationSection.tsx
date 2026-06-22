@@ -634,7 +634,7 @@ export const DocumentClassificationSection = ({
   const hasMoreCurrentFiles = visibleCurrentFiles.length < currentFiles.length;
   const selectedFileIdSet = useMemo(() => new Set(selectedFileIds), [selectedFileIds]);
   const currentFileIds = useMemo(
-    () => currentFiles.map((file) => file.id),
+    () => currentFiles.filter((file) => file.sourceKind !== 'interview').map((file) => file.id),
     [currentFiles],
   );
   const selectedCurrentFileCount = currentFileIds.filter((fileId) => selectedFileIdSet.has(fileId)).length;
@@ -1294,6 +1294,10 @@ export const DocumentClassificationSection = ({
   };
 
   const toggleFileSelection = (fileId: string) => {
+    if (files.find((file) => file.id === fileId)?.sourceKind === 'interview') {
+      return;
+    }
+
     setSelectedFileIds((previous) =>
       previous.includes(fileId)
         ? previous.filter((selectedId) => selectedId !== fileId)
@@ -1875,10 +1879,15 @@ export const DocumentClassificationSection = ({
                           <input
                             type="checkbox"
                             checked={selectedFileIdSet.has(file.id)}
+                            disabled={file.sourceKind === 'interview'}
                             onChange={() => toggleFileSelection(file.id)}
                             onClick={(event) => event.stopPropagation()}
-                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
-                            aria-label={`选择 ${file.title}`}
+                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label={
+                              file.sourceKind === 'interview'
+                                ? `${file.title} 不可删除`
+                                : `选择 ${file.title}`
+                            }
                           />
                         </label>
                         <button

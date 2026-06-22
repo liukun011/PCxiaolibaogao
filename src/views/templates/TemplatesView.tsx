@@ -268,7 +268,7 @@ export const TemplatesView = ({
     }
 
     if (!uploadModal.file) {
-      setUploadModalError("请选择本机模板文件");
+      setUploadModalError("请选择本机标准报告样例文件");
       return;
     }
 
@@ -492,7 +492,7 @@ export const TemplatesView = ({
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Plus size={16} />
-            <span>上传模板</span>
+            <span>上传报告样例</span>
           </button>
         </div>
       </div>
@@ -648,7 +648,7 @@ export const TemplatesView = ({
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">上传模板</h3>
+                  <h3 className="text-base font-bold text-gray-900">上传报告样例</h3>
                 </div>
                 <button
                   onClick={closeUploadModal}
@@ -735,7 +735,7 @@ export const TemplatesView = ({
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                     <label className="flex items-center gap-1.5 text-sm font-bold text-gray-700">
                       <span>
-                        模板文件 <span className="text-red-500">*</span>
+                        报告样例文件 <span className="text-red-500">*</span>
                       </span>
                     </label>
                     <button
@@ -744,7 +744,7 @@ export const TemplatesView = ({
                       className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-50"
                     >
                       <Download size={13} />
-                      <span>下载模板文件示例</span>
+                      <span>下载报告样例文件示例</span>
                     </button>
                   </div>
                   <button
@@ -754,7 +754,7 @@ export const TemplatesView = ({
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-gray-800">
-                        {uploadModal.file?.name || "选择本机模板文件"}
+                        {uploadModal.file?.name || "选择本机标准报告样例文件"}
                       </span>
                       <span className="mt-1 block text-xs text-gray-500">支持 .doc、.docx</span>
                     </span>
