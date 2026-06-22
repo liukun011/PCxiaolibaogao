@@ -28,12 +28,25 @@ import {
   updateKnowledgeDocument,
 } from '../utils/documentKnowledge';
 
+export type MaterialDirectoryNode = {
+  name: string;
+  path: string;
+  children: MaterialDirectoryNode[];
+};
+
+export type MaterialDirectorySnapshot = {
+  folders: MaterialDirectoryNode[];
+  files: KnowledgeDocument[];
+};
+
 type DocumentClassificationSectionProps = {
   sectionNumber: number;
   title: string;
   hideHeader?: boolean;
   hideFileDetails?: boolean;
   onFilesStateChange?: (hasFiles: boolean) => void;
+  materialSnapshot?: MaterialDirectorySnapshot | null;
+  onMaterialSnapshotChange?: (snapshot: MaterialDirectorySnapshot) => void;
   initialFiles?: Array<{
     name: string;
     path: string;
@@ -120,17 +133,14 @@ type FileSystemDirectoryHandleLike = {
   entries: () => AsyncIterable<[string, FileSystemFileHandleLike | FileSystemDirectoryHandleLike]>;
 };
 
-type FolderTreeNodeData = {
-  name: string;
-  path: string;
-  children: FolderTreeNodeData[];
-};
+type FolderTreeNodeData = MaterialDirectoryNode;
 
 const DEFAULT_UPLOAD_FOLDER = '企业资料';
 const LEGACY_UPLOAD_FOLDER = '上传文件';
 const INTERVIEW_FOLDER = '访谈录音';
 const NOTE_FOLDER = '笔记';
-const DEFAULT_MATERIAL_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER];
+export const MATERIAL_ROOT_FOLDERS = [DEFAULT_UPLOAD_FOLDER, INTERVIEW_FOLDER, NOTE_FOLDER] as const;
+const DEFAULT_MATERIAL_FOLDERS: string[] = [...MATERIAL_ROOT_FOLDERS];
 const DEFAULT_MOCK_TIMES = ['2026-04-18 09:32', '2026-04-18 10:16', '2026-04-18 11:05'];
 const UPLOAD_BATCH_SIZE = 35;
 const UPLOAD_BATCH_DELAY_MS = 520;
@@ -262,6 +272,9 @@ const buildFolderTreeData = (folderPaths: string[]): FolderTreeNodeData[] => {
 
   return sortNodes(root);
 };
+
+const flattenFolderTreePaths = (nodes: MaterialDirectoryNode[]): string[] =>
+  nodes.flatMap((node) => [node.path, ...flattenFolderTreePaths(node.children)]);
 
 const buildBreadcrumbs = (path: string) => {
   const normalized = normalizeFolderPath(path);
@@ -512,12 +525,20 @@ export const DocumentClassificationSection = ({
   hideHeader = false,
   hideFileDetails = false,
   onFilesStateChange,
+  materialSnapshot,
+  onMaterialSnapshotChange,
   initialFiles = [],
 }: DocumentClassificationSectionProps) => {
   const initialDocuments = useMemo(() => normalizeInitialFiles(initialFiles), [initialFiles]);
-  const [files, setFiles] = useState<KnowledgeDocument[]>(initialDocuments);
-  const [folderPaths, setFolderPaths] = useState<string[]>(
-    mergeFolderPaths(DEFAULT_MATERIAL_FOLDERS, initialDocuments.map((file) => file.directoryPath)),
+  const [files, setFiles] = useState<KnowledgeDocument[]>(
+    () => materialSnapshot?.files.map((file) => ({ ...file })) ?? initialDocuments,
+  );
+  const [folderPaths, setFolderPaths] = useState<string[]>(() =>
+    mergeFolderPaths(
+      DEFAULT_MATERIAL_FOLDERS,
+      materialSnapshot ? flattenFolderTreePaths(materialSnapshot.folders) : [],
+      (materialSnapshot?.files ?? initialDocuments).map((file) => file.directoryPath),
+    ),
   );
   const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -681,6 +702,13 @@ export const DocumentClassificationSection = ({
   useEffect(() => {
     onFilesStateChange?.(files.length > 0);
   }, [files, onFilesStateChange]);
+
+  useEffect(() => {
+    onMaterialSnapshotChange?.({
+      folders: folderTree,
+      files,
+    });
+  }, [files, folderTree, onMaterialSnapshotChange]);
 
   useEffect(() => {
     setSelectedFileIds([]);

@@ -81,7 +81,12 @@ import {
   LineChart
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { DocumentClassificationSection } from "@/src/components/DocumentClassificationSection";
+import {
+  DocumentClassificationSection,
+  MATERIAL_ROOT_FOLDERS,
+  type MaterialDirectoryNode,
+  type MaterialDirectorySnapshot,
+} from "@/src/components/DocumentClassificationSection";
 import { DocxToolbar } from "@/src/components/DocxToolbar";
 import { MaterialPreviewDialog, type MaterialPreviewData } from "@/src/components/MaterialPreviewDialog";
 import { TemplatePreviewView } from "@/src/views/templates/TemplatePreviewView";
@@ -122,73 +127,106 @@ type ReportBlockPreviewRow = {
   generatedValue?: string;
 };
 
-const REPORT_RULE_DATA_SOURCE_TREE = [
-  {
-    group: "业务申请材料",
-    children: ["授信申请书", "客户归属关系表", "采购合同", "授信方案", "抵押方案"],
-  },
-  {
-    group: "企业基础资料",
-    children: ["营业执照", "工商登记信息", "股东名册", "官方网站", "现场走访材料"],
-  },
-  {
-    group: "风险核查资料",
-    children: ["企业征信报告", "实控人个人征信", "法院执行网", "企查查", "法务访谈", "司法风险检索报告"],
-  },
-  {
-    group: "经营财务资料",
-    children: ["销售合同汇总", "财务报表", "销售台账", "财务测算表"],
-  },
-  {
-    group: "访谈与过程资料",
-    children: ["管理层访谈", "会议纪要", "访谈记录", "录音转写"],
-  },
-  {
-    group: "规则与清单",
-    children: ["风控核查清单", "贷审规则", "征信及司法检索结果"],
-  },
-];
+type RuleDataSourceFile = {
+  id: string;
+  label: string;
+  name: string;
+  value: string;
+  directoryPath: string;
+};
 
 const parseRuleDataSources = (value: string) =>
   value
-    .split("/")
+    .split(/\s+\/\s+/)
     .map((item) => item.trim())
     .filter(Boolean);
 
 const formatRuleDataSources = (items: string[]) => items.join(" / ");
 
+const createFallbackMaterialFolders = (): MaterialDirectoryNode[] =>
+  MATERIAL_ROOT_FOLDERS.map((name) => ({
+    name,
+    path: name,
+    children: [],
+  }));
+
+const getMaterialFolders = (snapshot?: MaterialDirectorySnapshot | null) => {
+  const snapshotRoots = new Map((snapshot?.folders ?? []).map((folder) => [folder.path, folder]));
+
+  return MATERIAL_ROOT_FOLDERS.map((rootPath) => snapshotRoots.get(rootPath) ?? {
+    name: rootPath,
+    path: rootPath,
+    children: [],
+  });
+};
+
+const getRuleDataSourceFiles = (snapshot?: MaterialDirectorySnapshot | null): RuleDataSourceFile[] =>
+  (snapshot?.files ?? []).map((file) => ({
+    id: file.id,
+    label: file.title || file.name,
+    name: file.name,
+    value: file.relativePath || `${file.directoryPath}/${file.name}`,
+    directoryPath: file.directoryPath,
+  }));
+
 const RuleDataSourceTreeSelect = ({
   value,
   onChange,
+  materialSnapshot,
 }: {
   value: string;
   onChange: (nextValue: string) => void;
+  materialSnapshot?: MaterialDirectorySnapshot | null;
 }) => {
+  const folderTree = getMaterialFolders(materialSnapshot);
+  const sourceFiles = getRuleDataSourceFiles(materialSnapshot);
   const [open, setOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(REPORT_RULE_DATA_SOURCE_TREE.map((group) => group.group)),
+    () => new Set(createFallbackMaterialFolders().map((folder) => folder.path)),
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedItems = parseRuleDataSources(value);
   const normalizedSearchKeyword = searchKeyword.trim().toLocaleLowerCase();
-  const filteredGroups = REPORT_RULE_DATA_SOURCE_TREE
-    .map((group) => {
-      if (!normalizedSearchKeyword) return group;
+  const filesByDirectory = new Map<string, RuleDataSourceFile[]>();
+  const fileByValue = new Map(sourceFiles.map((file) => [file.value, file]));
 
-      const groupMatches = group.group.toLocaleLowerCase().includes(normalizedSearchKeyword);
-      const matchedChildren = group.children.filter((item) =>
-        item.toLocaleLowerCase().includes(normalizedSearchKeyword),
-      );
+  sourceFiles.forEach((file) => {
+    const directoryFiles = filesByDirectory.get(file.directoryPath) ?? [];
+    directoryFiles.push(file);
+    filesByDirectory.set(file.directoryPath, directoryFiles);
+  });
 
-      return groupMatches
-        ? group
-        : {
-            ...group,
-            children: matchedChildren,
-          };
-    })
-    .filter((group) => group.children.length > 0);
+  const getDescendantFiles = (folder: MaterialDirectoryNode): RuleDataSourceFile[] => [
+    ...(filesByDirectory.get(folder.path) ?? []),
+    ...folder.children.flatMap(getDescendantFiles),
+  ];
+
+  const filterFolderTree = (folder: MaterialDirectoryNode): MaterialDirectoryNode | null => {
+    if (!normalizedSearchKeyword) {
+      return folder;
+    }
+
+    const folderMatches = `${folder.name} ${folder.path}`.toLocaleLowerCase().includes(normalizedSearchKeyword);
+    if (folderMatches) {
+      return folder;
+    }
+
+    const matchingChildren = folder.children
+      .map(filterFolderTree)
+      .filter((child): child is MaterialDirectoryNode => child !== null);
+    const hasMatchingFile = (filesByDirectory.get(folder.path) ?? []).some((file) =>
+      `${file.label} ${file.name} ${file.value}`.toLocaleLowerCase().includes(normalizedSearchKeyword),
+    );
+
+    return matchingChildren.length > 0 || hasMatchingFile
+      ? { ...folder, children: matchingChildren }
+      : null;
+  };
+
+  const filteredFolderTree = folderTree
+    .map(filterFolderTree)
+    .filter((folder): folder is MaterialDirectoryNode => folder !== null);
 
   useEffect(() => {
     if (!open) return;
@@ -203,21 +241,22 @@ const RuleDataSourceTreeSelect = ({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
-  const toggleDataSource = (option: string) => {
-    const nextItems = selectedItems.includes(option)
-      ? selectedItems.filter((item) => item !== option)
-      : [...selectedItems, option];
+  const toggleDataSource = (sourceValue: string) => {
+    const nextItems = selectedItems.includes(sourceValue)
+      ? selectedItems.filter((item) => item !== sourceValue)
+      : [...selectedItems, sourceValue];
     onChange(formatRuleDataSources(nextItems));
   };
 
-  const toggleDataSourceGroup = (children: string[]) => {
+  const toggleDataSourceGroup = (sources: RuleDataSourceFile[]) => {
+    const sourceValues = sources.map((source) => source.value);
     const selectedSet = new Set(selectedItems);
-    const allSelected = children.every((item) => selectedSet.has(item));
+    const allSelected = sourceValues.length > 0 && sourceValues.every((item) => selectedSet.has(item));
 
     if (allSelected) {
-      children.forEach((item) => selectedSet.delete(item));
+      sourceValues.forEach((item) => selectedSet.delete(item));
     } else {
-      children.forEach((item) => selectedSet.add(item));
+      sourceValues.forEach((item) => selectedSet.add(item));
     }
 
     onChange(formatRuleDataSources(Array.from(selectedSet)));
@@ -235,6 +274,113 @@ const RuleDataSourceTreeSelect = ({
     });
   };
 
+  const renderFolder = (
+    folder: MaterialDirectoryNode,
+    depth = 0,
+    showAllDescendants = false,
+  ): React.ReactNode => {
+    const folderMatches =
+      showAllDescendants ||
+      (normalizedSearchKeyword
+        ? `${folder.name} ${folder.path}`.toLocaleLowerCase().includes(normalizedSearchKeyword)
+        : false);
+    const directFiles = (filesByDirectory.get(folder.path) ?? []).filter((file) => {
+      if (!normalizedSearchKeyword || folderMatches) {
+        return true;
+      }
+
+      return `${file.label} ${file.name} ${file.value}`.toLocaleLowerCase().includes(normalizedSearchKeyword);
+    });
+    const descendantFiles = getDescendantFiles(folder);
+    const allSelected =
+      descendantFiles.length > 0 && descendantFiles.every((file) => selectedItems.includes(file.value));
+    const partialSelected = descendantFiles.some((file) => selectedItems.includes(file.value));
+    const expanded = normalizedSearchKeyword ? true : expandedGroups.has(folder.path);
+
+    return (
+      <div key={folder.path} className="rounded-xl">
+        <div
+          className={`flex items-center rounded-xl transition-colors ${
+            partialSelected ? "bg-blue-50/70" : "hover:bg-slate-50"
+          }`}
+          style={{ marginLeft: depth * 12 }}
+        >
+          <button
+            type="button"
+            onClick={() => toggleGroupExpanded(folder.path)}
+            className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-semibold ${
+              partialSelected ? "text-blue-700" : "text-slate-700"
+            }`}
+          >
+            <ChevronRight
+              size={15}
+              className={`shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`}
+            />
+            {expanded ? (
+              <FolderOpen size={16} className="shrink-0 text-blue-500" />
+            ) : (
+              <Folder size={16} className="shrink-0 text-slate-400" />
+            )}
+            <span className="truncate">{folder.name}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleDataSourceGroup(descendantFiles)}
+            disabled={descendantFiles.length === 0}
+            className={`mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+              partialSelected
+                ? "text-blue-600 hover:bg-blue-100"
+                : "text-slate-300 hover:bg-slate-100 hover:text-slate-500"
+            } disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent`}
+            title={
+              descendantFiles.length === 0
+                ? "该目录暂无文件"
+                : allSelected
+                  ? "取消选择该目录"
+                  : "选择该目录全部数据源"
+            }
+          >
+            {allSelected ? (
+              <Check size={15} />
+            ) : partialSelected ? (
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            ) : (
+              <span className="h-3.5 w-3.5 rounded border border-current" />
+            )}
+          </button>
+        </div>
+
+        {expanded && (
+          <div className="ml-5 border-l border-slate-100 py-1 pl-3">
+            {folder.children.map((child) => renderFolder(child, depth + 1, folderMatches))}
+            {directFiles.map((file) => {
+              const checked = selectedItems.includes(file.value);
+              return (
+                <button
+                  key={file.id}
+                  type="button"
+                  onClick={() => toggleDataSource(file.value)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                    checked
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                  }`}
+                  style={{ paddingLeft: 12 + depth * 12 }}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <FileIcon size={15} className={`shrink-0 ${checked ? "text-blue-500" : "text-slate-400"}`} />
+                    <span className="truncate">{file.label}</span>
+                  </span>
+                  {checked && <Check size={15} className="shrink-0 text-blue-600" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -248,7 +394,7 @@ const RuleDataSourceTreeSelect = ({
           {selectedItems.length ? (
             selectedItems.map((item) => (
               <span key={item} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                {item}
+                {fileByValue.get(item)?.label ?? item}
               </span>
             ))
           ) : (
@@ -274,86 +420,15 @@ const RuleDataSourceTreeSelect = ({
           </div>
 
           <div className="max-h-72 overflow-y-auto p-2">
-            {filteredGroups.length ? (
-              filteredGroups.map((group) => {
-                const originalGroup = REPORT_RULE_DATA_SOURCE_TREE.find((item) => item.group === group.group) ?? group;
-                const allSelected = originalGroup.children.every((item) => selectedItems.includes(item));
-                const partialSelected = originalGroup.children.some((item) => selectedItems.includes(item));
-                const expanded = normalizedSearchKeyword ? true : expandedGroups.has(group.group);
-
-                return (
-                  <div key={group.group} className="rounded-xl">
-                    <div
-                      className={`flex items-center rounded-xl transition-colors ${
-                        partialSelected ? "bg-blue-50/70" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleGroupExpanded(group.group)}
-                        className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-semibold ${
-                          partialSelected ? "text-blue-700" : "text-slate-700"
-                        }`}
-                      >
-                        <ChevronRight
-                          size={15}
-                          className={`shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`}
-                        />
-                        {expanded ? (
-                          <FolderOpen size={16} className="shrink-0 text-blue-500" />
-                        ) : (
-                          <Folder size={16} className="shrink-0 text-slate-400" />
-                        )}
-                        <span className="truncate">{group.group}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleDataSourceGroup(originalGroup.children)}
-                        className={`mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                          partialSelected
-                            ? "text-blue-600 hover:bg-blue-100"
-                            : "text-slate-300 hover:bg-slate-100 hover:text-slate-500"
-                        }`}
-                        title={allSelected ? "取消选择该目录" : "选择该目录全部数据源"}
-                      >
-                        {allSelected ? (
-                          <Check size={15} />
-                        ) : partialSelected ? (
-                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                        ) : (
-                          <span className="h-3.5 w-3.5 rounded border border-current" />
-                        )}
-                      </button>
-                    </div>
-
-                    {expanded && (
-                      <div className="ml-5 border-l border-slate-100 py-1 pl-3">
-                        {group.children.map((option) => {
-                          const checked = selectedItems.includes(option);
-                          return (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => toggleDataSource(option)}
-                              className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                                checked
-                                  ? "bg-blue-50 text-blue-700"
-                                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                              }`}
-                            >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <FileIcon size={15} className={`shrink-0 ${checked ? "text-blue-500" : "text-slate-400"}`} />
-                                <span className="truncate">{option}</span>
-                              </span>
-                              {checked && <Check size={15} className="shrink-0 text-blue-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+            {filteredFolderTree.length ? (
+              <>
+                {filteredFolderTree.map((folder) => renderFolder(folder))}
+                {sourceFiles.length === 0 && !normalizedSearchKeyword && (
+                  <div className="px-3 py-5 text-center text-xs leading-5 text-slate-400">
+                    当前报告暂无可选资料，请先在报告资料中上传文件或新建目录。
                   </div>
-                );
-              })
+                )}
+              </>
             ) : (
               <div className="px-3 py-8 text-center text-sm text-slate-400">未找到匹配的数据来源</div>
             )}
@@ -370,6 +445,7 @@ export const EditReportView = ({
   onDownloadConflict,
   onDownloadTraceability,
   intelligenceResult,
+  materialSnapshot,
   initialSideTab,
   templates,
   setTemplates,
@@ -379,6 +455,7 @@ export const EditReportView = ({
   onDownloadConflict: () => void,
   onDownloadTraceability: () => void,
   intelligenceResult?: any,
+  materialSnapshot?: MaterialDirectorySnapshot | null,
   initialSideTab?: "conflict" | "traceability",
   templates: TemplateItem[],
   setTemplates: React.Dispatch<React.SetStateAction<TemplateItem[]>>
@@ -3374,6 +3451,7 @@ export const EditReportView = ({
                   <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
                   <RuleDataSourceTreeSelect
                     value={fieldRuleModal.dataSource}
+                    materialSnapshot={materialSnapshot}
                     onChange={(nextValue) =>
                       setFieldRuleModal((previous) => ({ ...previous, dataSource: nextValue }))
                     }
@@ -3457,6 +3535,7 @@ export const EditReportView = ({
                     <span className="mb-2 block text-sm font-medium text-slate-700">数据来源</span>
                     <RuleDataSourceTreeSelect
                       value={reportBlockRuleModal.dataSource}
+                      materialSnapshot={materialSnapshot}
                       onChange={(nextValue) =>
                         setReportBlockRuleModal((previous) => ({ ...previous, dataSource: nextValue }))
                       }
