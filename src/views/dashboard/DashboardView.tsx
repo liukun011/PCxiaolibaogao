@@ -1910,54 +1910,50 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
           </div>
 
           <div className={activeMaterialsTab === "questions" ? "block" : "hidden"}>
-          <section className="space-y-4">
-            <div className="flex items-center justify-end">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleOpenAIQuestionList}
-                  disabled={!canUseAIInsights}
-                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${!canUseAIInsights ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400" : questionListMode === "ai" ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700" : "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
-                  title={!canUseAIInsights ? aiInsightRequirementText : undefined}
-                >
-                  <Sparkles size={14} />
-                  <span>{questionListMode === "ai" ? "退出AI洞察" : "AI洞察"}</span>
-                </button>
-                {(isGeneratingAIInsights || pendingQuestions.length > 0 || intelligenceResult?.aiQuestions?.length) && (
-                  <button
-                    onClick={handleRegenerateAIInsights}
-                    className="rounded-lg border border-blue-200 bg-white p-2 text-blue-600 transition-all hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    title="重新AI洞察"
-                    disabled={isGeneratingAIInsights || !canUseAIInsights}
-                  >
-                    <RefreshCw size={14} className={isGeneratingAIInsights ? "animate-spin" : ""} />
-                  </button>
-                )}
-                <button
-                  onClick={handleOpenQuestionListSwitch}
-                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
-                >
-                  <span>添加问题</span>
-                </button>
-                {questionListMode === "default" && (
-                  <button
-                    onClick={() => setShowManualAdd(!showManualAdd)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${showManualAdd ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    <Plus size={14} />
-                    <span>手动添加</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
+          <section>
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-gray-50 bg-gray-50/30 flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/30 p-4">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {questionListMode === "ai" ? "AI洞察问题" : "当前问题"}
+                  {questionListMode === "ai" ? "AI洞察问题" : `当前预制：${currentPresetTemplateLabel}`}
                 </span>
-                {questionListMode === "ai" ? (
-                  <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <button
+                    onClick={handleOpenAIQuestionList}
+                    disabled={!canUseAIInsights}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${!canUseAIInsights ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400" : questionListMode === "ai" ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700" : "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
+                    title={!canUseAIInsights ? aiInsightRequirementText : undefined}
+                  >
+                    <Sparkles size={14} />
+                    <span>{questionListMode === "ai" ? "退出AI洞察" : "AI洞察"}</span>
+                  </button>
+                  {(isGeneratingAIInsights || pendingQuestions.length > 0 || intelligenceResult?.aiQuestions?.length) && (
+                    <button
+                      onClick={handleRegenerateAIInsights}
+                      className="rounded-lg border border-blue-200 bg-white p-2 text-blue-600 transition-all hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="重新AI洞察"
+                      disabled={isGeneratingAIInsights || !canUseAIInsights}
+                    >
+                      <RefreshCw size={14} className={isGeneratingAIInsights ? "animate-spin" : ""} />
+                    </button>
+                  )}
+                  <button
+                    onClick={handleOpenQuestionListSwitch}
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50"
+                  >
+                    <span>添加问题</span>
+                  </button>
+                  {questionListMode === "default" && (
+                    <button
+                      onClick={() => setShowManualAdd(!showManualAdd)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${showManualAdd ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                    >
+                      <Plus size={14} />
+                      <span>手动添加</span>
+                    </button>
+                  )}
+                  {questionListMode === "ai" ? (
+                    <>
                     {pendingQuestions.length > 0 && (
                       <button
                         onClick={() => {
@@ -1976,10 +1972,9 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                     >
                       导入到当前问题
                     </button>
-                  </div>
-                ) : (
-                  <span className="text-[10px] text-gray-400 font-medium">当前预制：{currentPresetTemplateLabel}</span>
-                )}
+                    </>
+                  ) : null}
+                </div>
               </div>
 
               {questionListMode === "default" && (
@@ -2085,7 +2080,7 @@ export const DashboardView = ({ onBack, onEdit, onAudit, onDownload, onOpenModal
                       return acc;
                     }, {} as Record<string, InterviewQuestion[]>)) as [string, InterviewQuestion[]][]).map(([category, catQuestions]) => (
                       <div key={category} className="border-b border-gray-50 last:border-0">
-                        <div className="bg-gray-50/50 px-6 py-2 flex items-center justify-between">
+                        <div className="bg-gray-100/70 px-6 py-2 flex items-center justify-between">
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{category}</span>
                           <span className="text-[10px] text-gray-400 font-medium">{catQuestions.length} 个问题</span>
                         </div>
