@@ -106,6 +106,7 @@ import {
   type TemplateItem,
   type ViewType,
 } from "./shared/templateData";
+import { INITIAL_REPORT_PROJECTS, type ReportProject } from "./shared/projectData";
 import { RecordingsView } from "./views/recordings/RecordingsView"; // Import new RecordingsView
 import { HomeView } from "./HomeView"; // Import new HomeView
 import { KnowledgeBaseView } from "./KnowledgeBaseView"; // Import new KnowledgeBaseView
@@ -145,6 +146,8 @@ export default function App() {
   const [standaloneShell, setStandaloneShell] = useState(initialStandaloneShell);
   const [editInitialTab, setEditInitialTab] = useState<"conflict" | "traceability">("conflict");
   const [dashboardSection, setDashboardSection] = useState<"questions" | null>(null);
+  const [projectListCreateRequest, setProjectListCreateRequest] = useState(0);
+  const [projects, setProjects] = useState<ReportProject[]>(INITIAL_REPORT_PROJECTS);
   const [templates, setTemplates] = useState<TemplateItem[]>(INITIAL_TEMPLATE_ITEMS);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
   const [isNewTemplatePreview, setIsNewTemplatePreview] = useState(false);
@@ -508,10 +511,29 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-y-auto relative">
-        {currentView === "home" && <HomeView />}
+        {currentView === "home" && (
+          <HomeView
+            projects={projects}
+            templates={templates}
+            questionCollections={questionCollections}
+            onNavigate={(target) => {
+              setStandaloneShell(false);
+              setCurrentView(target);
+            }}
+            onNewProject={() => {
+              setStandaloneShell(false);
+              setProjectListCreateRequest((previous) => previous + 1);
+              setCurrentView("projectList");
+            }}
+            onOpenReport={openDashboardInNewTab}
+          />
+        )}
         {currentView === "projectList" && (
           <ProjectListView
             onSelectProject={openDashboardInNewTab}
+            projects={projects}
+            setProjects={setProjects}
+            createRequest={projectListCreateRequest}
             onStartIntelligence={() => {
               setIntelligenceSource("projectList");
               setIntelligenceInitialStep("input");
@@ -662,6 +684,10 @@ export default function App() {
 
         {currentView === "recordings" && (
           <RecordingsView onBack={() => setCurrentView("projectList")} />
+        )}
+
+        {currentView === "knowledgeBase" && (
+          <KnowledgeBaseView />
         )}
       </main>
       {isModalOpen && (

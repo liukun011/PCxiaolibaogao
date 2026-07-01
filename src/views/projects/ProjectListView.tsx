@@ -93,25 +93,28 @@ import {
   type QuestionCollection,
   type TemplateItem,
 } from "@/src/shared/templateData";
+import {
+  getReportProjectStatus,
+  getReportProjectStatusLabel,
+  type ReportProject,
+  type ReportProjectStatus,
+} from "@/src/shared/projectData";
 
-type ReportProjectStatus = "generated" | "generating" | "pending";
-
-type ReportProject = {
-  id: number;
-  title: string;
-  desc: string;
-  companyName: string;
-  createdBy: string;
-  createdAt: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  reportGenerated: boolean;
-  status?: ReportProjectStatus;
-  reportStatus?: ReportProjectStatus;
-  reportProgress?: number;
-  reportStage?: string;
-};
-
-export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirectNew }: { onSelectProject: (project: { id: number; title: string; desc: string }) => void, onStartIntelligence: () => void, onDirectNew: (projectName: string, companyName: string, template: string, initialQuestions: any[], targetType?: string, targetCode?: string, enableAI?: boolean) => void }) => {
+export const ProjectListView = ({
+  onSelectProject,
+  onStartIntelligence,
+  onDirectNew,
+  projects,
+  setProjects,
+  createRequest = 0,
+}: {
+  onSelectProject: (project: ReportProject) => void,
+  onStartIntelligence: () => void,
+  onDirectNew: (projectName: string, companyName: string, template: string, initialQuestions: any[], targetType?: string, targetCode?: string, enableAI?: boolean) => void,
+  projects: ReportProject[],
+  setProjects: React.Dispatch<React.SetStateAction<ReportProject[]>>,
+  createRequest?: number,
+}) => {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [showDirectNewModal, setShowDirectNewModal] = useState(false);
   const [customProjectName, setCustomProjectName] = useState("");
@@ -151,14 +154,47 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
     };
   }, []);
 
+  useEffect(() => {
+    if (createRequest > 0) {
+      setShowDirectNewModal(true);
+    }
+  }, [createRequest]);
+
   const handleCreateProject = () => {
     if (!customProjectName.trim()) {
       return;
     }
 
+    const trimmedProjectName = customProjectName.trim();
+    const trimmedCompanyName = newProjectName.trim();
+
+    setProjects((previous) => [
+      {
+        id: Math.max(0, ...previous.map((project) => project.id)) + 1,
+        title: trimmedProjectName,
+        companyName: trimmedCompanyName || "未填写企业",
+        desc: trimmedCompanyName
+          ? `企业名称为“${trimmedCompanyName}”，已创建报告项目，待补充资料并生成报告。`
+          : "已创建报告项目，待补充企业信息、资料和问题清单后生成报告。",
+        createdBy: "当前用户",
+        createdAt: new Date().toLocaleString("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).replace(/\//g, "-"),
+        icon: ClipboardCheck,
+        reportGenerated: false,
+      },
+      ...previous,
+    ]);
+
     onDirectNew(
-      customProjectName.trim(),
-      newProjectName.trim(),
+      trimmedProjectName,
+      trimmedCompanyName,
       selectedTemplate,
       [...TEMPLATE_QUESTION_SETS[selectedTemplate]],
       targetType,
@@ -172,17 +208,6 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
     setTargetType("company");
     setTargetCode("");
   };
-
-  const [projects, setProjects] = useState<ReportProject[]>([
-    { id: 1, title: "小狸报告流贷尽调", companyName: "小狸报告", desc: "公司名称为“小狸报告”，主营AI智能报告生成。面向数字化转...", createdBy: "李销售", createdAt: "2026-03-19 16:09:08", icon: FileText, reportGenerated: true, reportStatus: "generated" as ReportProjectStatus },
-    { id: 2, title: "A 公司经营尽调", companyName: "A 公司", desc: "公司名称为“a”，主营业务未提供，财务状况未提供相关信息...", createdBy: "王客户经理", createdAt: "2026-03-13 14:15:34", icon: Building, reportGenerated: false, status: "generating" as ReportProjectStatus, reportProgress: 62, reportStage: "正在生成财务分析与风险提示" },
-    { id: 3, title: "个人经营贷尽调", companyName: "个人客户", desc: "公司名称为“未提供”，主营业务未提供相关信息，财务状况未...", createdBy: "张尽调", createdAt: "2026-03-07 14:01:01", icon: User, reportGenerated: false },
-    { id: 4, title: "B 企业访谈尽调", companyName: "B 企业", desc: "访谈小总结未生成，请刷新生成。", createdBy: "陈分析师", createdAt: "2026-03-03 16:54:20", icon: MessageSquare, reportGenerated: false },
-    { id: 5, title: "11 号项目", companyName: "未提供", desc: "公司名称为“未提供”，主营业务未提供相关信息，财务状况未...", createdBy: "李销售", createdAt: "2026-03-02 15:07:28", icon: ClipboardCheck, reportGenerated: false },
-    { id: 6, title: "AA 访谈项目", companyName: "AA", desc: "访谈小总结未生成，请刷新生成。", createdBy: "周经理", createdAt: "2026-03-02 15:07:23", icon: Mic, reportGenerated: false },
-    { id: 7, title: "AA 企业资料尽调", companyName: "AA 企业", desc: "访谈小总结未生成，请刷新生成。", createdBy: "赵审核", createdAt: "2026-03-02 15:06:53", icon: FileText, reportGenerated: false },
-    { id: 8, title: "A 企业补充尽调", companyName: "A 企业", desc: "访谈小总结未生成，请刷新生成。", createdBy: "钱顾问", createdAt: "2026-02-25 15:23:39", icon: FileIcon, reportGenerated: false },
-  ]);
 
   const handleEditProject = (event: React.MouseEvent, project: ReportProject) => {
     event.stopPropagation();
@@ -454,8 +479,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
         {/* Grid */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {projects.map((project) => {
-            const isReportGenerated = project.reportGenerated || generatedReportIds.includes(String(project.id));
-            const reportStatus: ReportProjectStatus = project.status || project.reportStatus || (isReportGenerated ? "generated" : "pending");
+            const reportStatus: ReportProjectStatus = getReportProjectStatus(project, generatedReportIds);
             const reportStatusTitle =
               reportStatus === "generated" ? "报告已生成" : reportStatus === "generating" ? "报告生成中" : "报告未生成";
 
@@ -463,7 +487,13 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
               <motion.div
                 key={project.id}
                 whileHover={{ y: -4, boxShadow: "0 18px 40px -24px rgba(15, 23, 42, 0.35)" }}
-                onClick={() => onSelectProject(project)}
+                onClick={() =>
+                  onSelectProject({
+                    ...project,
+                    reportGenerated: reportStatus === "generated",
+                    reportStatus,
+                  })
+                }
                 className={`group flex h-56 cursor-pointer flex-col rounded-2xl border p-6 transition-all ${
                   reportStatus === "generating"
                     ? "border-blue-200 bg-blue-50/50 shadow-sm hover:border-blue-300 hover:bg-white hover:shadow-lg"
@@ -506,7 +536,7 @@ export const ProjectListView = ({ onSelectProject, onStartIntelligence, onDirect
                     }`}
                     title={reportStatusTitle}
                   >
-                    {reportStatus === "generated" ? "已生成" : reportStatus === "generating" ? "生成中" : "未生成"}
+                    {getReportProjectStatusLabel(reportStatus)}
                   </span>
                 </div>
 
