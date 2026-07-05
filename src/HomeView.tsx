@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BriefcaseBusiness,
-  Check,
   ClipboardCheck,
   FileText,
   Layers3,
@@ -29,25 +28,22 @@ type HomeViewProps = {
 
 const statusMeta: Record<
   ReportProjectStatus,
-  { phase: string; action: string; chipClassName: string; buttonClassName: string }
+  { phase: string; action: string; chipClassName: string }
 > = {
   pending: {
     phase: "准备资料",
     action: "进入项目",
     chipClassName: "bg-blue-50 text-blue-600",
-    buttonClassName: "bg-blue-50 text-blue-600",
   },
   generating: {
-    phase: "生成报告",
-    action: "查看进度",
+    phase: "报告生成中",
+    action: "进入项目",
     chipClassName: "bg-orange-50 text-orange-600",
-    buttonClassName: "bg-orange-50 text-orange-600",
   },
   generated: {
-    phase: "查看报告",
-    action: "查看报告",
+    phase: "报告已生成",
+    action: "进入项目",
     chipClassName: "bg-emerald-50 text-emerald-600",
-    buttonClassName: "bg-emerald-50 text-emerald-600",
   },
 };
 
@@ -310,8 +306,7 @@ const ProjectCard: React.FC<{
       </div>
 
       <div className="mt-auto flex justify-center pt-3">
-        <span className={`inline-flex min-w-16 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold ${meta.buttonClassName}`}>
-          {status === "generated" && <Check size={15} className="mr-1" />}
+        <span className="inline-flex min-w-16 items-center justify-center rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600">
           {meta.action}
         </span>
       </div>
