@@ -492,7 +492,7 @@ export const TemplatesView = ({
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Plus size={16} />
-            <span>上传报告样例</span>
+            <span>生成模板</span>
           </button>
         </div>
       </div>
@@ -648,7 +648,7 @@ export const TemplatesView = ({
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">上传报告样例</h3>
+                  <h3 className="text-base font-bold text-gray-900">生成模板</h3>
                 </div>
                 <button
                   onClick={closeUploadModal}

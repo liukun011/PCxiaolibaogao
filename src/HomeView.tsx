@@ -1,19 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  CheckCircle2,
+  BarChart3,
+  BriefcaseBusiness,
+  Building2,
+  Car,
+  Check,
   ClipboardCheck,
   FileText,
-  FolderOpen,
-  Layers,
-  Mic,
-  PlusCircle,
-  RefreshCw,
+  Layers3,
+  MoreVertical,
+  Stethoscope,
+  Users,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import type { QuestionCollection, TemplateItem } from "./shared/templateData";
 import {
   getReportProjectStatus,
-  getReportProjectStatusLabel,
   type ReportProject,
   type ReportProjectStatus,
 } from "./shared/projectData";
@@ -29,51 +33,103 @@ type HomeViewProps = {
   onOpenReport: (report: ReportProject) => void;
 };
 
-const statusStyle: Record<
+const statusMeta: Record<
   ReportProjectStatus,
-  {
-    description: string;
-    action: string;
-    badgeClassName: string;
-    iconClassName: string;
-    rowClassName: string;
-  }
+  { label: string; chipClassName: string; buttonClassName: string }
 > = {
+  pending: {
+    label: "访谈中",
+    chipClassName: "bg-blue-50 text-blue-600",
+    buttonClassName: "bg-blue-50 text-blue-600",
+  },
   generating: {
-    description: "报告正在生成，点进去可以看进度。",
-    action: "查看进度",
-    badgeClassName: "border-blue-600 bg-blue-600 text-white",
-    iconClassName: "border-blue-200 bg-blue-600 text-white shadow-sm shadow-blue-100",
-    rowClassName: "bg-blue-50/75 hover:bg-blue-50",
+    label: "报告生成中",
+    chipClassName: "bg-orange-50 text-orange-600",
+    buttonClassName: "bg-orange-50 text-orange-600",
   },
   generated: {
-    description: "报告已经生成，可以查看、编辑或下载。",
-    action: "查看报告",
-    badgeClassName: "border-green-100 bg-green-50 text-green-600",
-    iconClassName: "border-slate-200 bg-white text-blue-600",
-    rowClassName: "bg-white hover:bg-slate-50",
-  },
-  pending: {
-    description: "项目已创建，补充资料后就可以生成报告。",
-    action: "进入项目",
-    badgeClassName: "border-slate-200 bg-white text-slate-500",
-    iconClassName: "border-slate-200 bg-white text-slate-500",
-    rowClassName: "bg-white hover:bg-slate-50",
+    label: "已完成",
+    chipClassName: "bg-emerald-50 text-emerald-600",
+    buttonClassName: "bg-emerald-50 text-emerald-600",
   },
 };
 
-const statusOrder: Record<ReportProjectStatus, number> = {
-  generating: 0,
-  pending: 1,
-  generated: 2,
-};
+const workflowItems = [
+  { step: "1", title: "AI企业洞察", icon: BarChart3 },
+  { step: "2", title: "现场访谈", icon: Users },
+  { step: "3", title: "智能生成报告", icon: FileText },
+  { step: "4", title: "送审", icon: ClipboardCheck },
+];
+
+const statItems = [
+  { title: "项目数量", value: "128", change: "12.5%", icon: BriefcaseBusiness },
+  { title: "生成报告数量", value: "86", change: "18.7%", icon: FileText },
+  { title: "分析资料数量", value: "362", change: "9.3%", icon: Layers3 },
+  { title: "访谈次数", value: "245", change: "15.2%", icon: Users },
+];
+
+const demoCards = [
+  {
+    title: "华东制造业调研项目",
+    industry: "制造业",
+    phase: "现场访谈",
+    progress: 60,
+    updatedAt: "2024-05-20 14:30",
+    icon: Building2,
+    status: "pending" as ReportProjectStatus,
+  },
+  {
+    title: "新能源企业尽调报告",
+    industry: "新能源",
+    phase: "报告生成",
+    progress: 75,
+    updatedAt: "2024-05-20 11:20",
+    icon: Zap,
+    status: "generating" as ReportProjectStatus,
+  },
+  {
+    title: "连锁零售门店访谈项目",
+    industry: "零售消费",
+    phase: "智能生成报告",
+    progress: 40,
+    updatedAt: "2024-05-19 16:45",
+    icon: BriefcaseBusiness,
+    status: "generating" as ReportProjectStatus,
+  },
+  {
+    title: "生物医药投资分析",
+    industry: "生物医药",
+    phase: "送审",
+    progress: 90,
+    updatedAt: "2024-05-19 09:15",
+    icon: Stethoscope,
+    status: "generating" as ReportProjectStatus,
+  },
+  {
+    title: "智能汽车行业研究",
+    industry: "智能制造",
+    phase: "完成",
+    progress: 100,
+    updatedAt: "2024-05-18 17:30",
+    icon: Car,
+    status: "generated" as ReportProjectStatus,
+  },
+  {
+    title: "城市商业地产调研",
+    industry: "房地产",
+    phase: "现场访谈",
+    progress: 30,
+    updatedAt: "2024-05-18 10:05",
+    icon: Building2,
+    status: "pending" as ReportProjectStatus,
+  },
+];
 
 export const HomeView: React.FC<HomeViewProps> = ({
   projects,
   templates,
   questionCollections,
   onNavigate,
-  onNewProject,
   onOpenReport,
 }) => {
   const [generatedReportIds, setGeneratedReportIds] = useState<string[]>(() => {
@@ -111,17 +167,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
     [generatedReportIds, projects],
   );
 
-  const generatingCount = projectRows.filter((item) => item.status === "generating").length;
-  const generatedCount = projectRows.filter((item) => item.status === "generated").length;
-  const pendingCount = projectRows.filter((item) => item.status === "pending").length;
-  const enabledTemplateCount = templates.filter((template) => template.status === "enabled").length;
+  const recentProjects = demoCards.map((card, index) => {
+    const realProject = projectRows[index];
+    return {
+      ...card,
+      project: realProject?.project,
+      status: realProject?.status ?? card.status,
+    };
+  });
+
   const totalQuestionCount = questionCollections.reduce((total, collection) => total + collection.questions.length, 0);
+  const enabledTemplateCount = templates.filter((template) => template.status === "enabled").length;
 
-  const continueProjects = [...projectRows]
-    .sort((left, right) => statusOrder[left.status] - statusOrder[right.status])
-    .slice(0, 6);
+  const openProject = (project: ReportProject | undefined, status: ReportProjectStatus) => {
+    if (!project) {
+      onNavigate("projectList");
+      return;
+    }
 
-  const openProject = (project: ReportProject, status: ReportProjectStatus) => {
     onOpenReport({
       ...project,
       reportGenerated: status === "generated",
@@ -129,201 +192,87 @@ export const HomeView: React.FC<HomeViewProps> = ({
     });
   };
 
-  const overviewItems = [
-    {
-      label: "全部项目",
-      value: projects.length,
-      desc: "当前所有报告项目",
-      icon: ClipboardCheck,
-    },
-    {
-      label: "生成中",
-      value: generatingCount,
-      desc: "报告正在生成",
-      icon: RefreshCw,
-    },
-    {
-      label: "已生成",
-      value: generatedCount,
-      desc: "可以查看和下载",
-      icon: CheckCircle2,
-    },
-    {
-      label: "未生成",
-      value: pendingCount,
-      desc: "还没开始生成",
-      icon: FolderOpen,
-    },
-  ];
-
   return (
-    <div className="flex min-h-full flex-col bg-[#F6F8FB]">
-      <header className="shrink-0 border-b border-slate-200/70 bg-white">
-        <div className="mx-auto max-w-[1480px] px-8 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-5">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                <span>首页</span>
-                <span>/</span>
-                <span className="text-blue-600">工作台</span>
+    <div className="min-h-full overflow-y-auto bg-[#f5f8fd] p-5 text-slate-900">
+      <div className="mx-auto flex w-full max-w-[1520px] flex-col gap-4">
+        <section className="relative min-h-[150px] overflow-hidden rounded-2xl bg-[#0756d8] px-7 py-6 text-white shadow-[0_12px_28px_rgba(37,99,235,0.16)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_76%_26%,rgba(110,193,255,0.55),transparent_26%),linear-gradient(115deg,#0442c8_0%,#0868f0_52%,#0b8dff_100%)]" />
+          <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(255,255,255,.18)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.16)_1px,transparent_1px)] [background-size:64px_64px]" />
+          <div className="absolute -right-6 bottom-0 top-0 hidden w-[46%] items-center justify-center lg:flex">
+            <div className="relative h-[120px] w-[380px]">
+              <div className="absolute left-[72px] top-6 h-20 w-36 rounded-xl border border-cyan-200/50 bg-white/12 shadow-xl shadow-cyan-300/20 backdrop-blur-md" />
+              <div className="absolute right-10 top-1 h-28 w-48 rounded-xl border border-cyan-100/50 bg-white/14 shadow-xl shadow-blue-950/20 backdrop-blur-md">
+                <div className="m-3.5 flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full border-[10px] border-cyan-200/80 border-r-white/20" />
+                  <div className="space-y-2">
+                    <div className="h-1.5 w-24 rounded-full bg-white/60" />
+                    <div className="h-1.5 w-16 rounded-full bg-white/35" />
+                    <div className="h-1.5 w-28 rounded-full bg-white/35" />
+                  </div>
+                </div>
               </div>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-gray-900">工作台</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                看项目进度，继续处理还没完成的报告。
-              </p>
+              <div className="absolute bottom-0 right-0 h-24 w-[168px] rounded-xl border border-cyan-100/50 bg-white/16 p-3.5 shadow-xl backdrop-blur-md">
+                <div className="flex h-full items-end gap-2">
+                  {[38, 62, 48, 82, 74, 96].map((height) => (
+                    <span key={height} className="w-2.5 rounded-t bg-cyan-100/80" style={{ height: height * 0.68 }} />
+                  ))}
+                </div>
+              </div>
+              <div className="absolute bottom-4 left-6 flex h-14 w-14 items-center justify-center rounded-xl border border-cyan-100/60 bg-white/18 text-base font-black shadow-xl backdrop-blur-md">
+                AI
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+          <div className="relative z-10 max-w-2xl">
+            <h1 className="text-2xl font-bold tracking-normal md:text-3xl">欢迎使用小狸报告</h1>
+            <p className="mt-3 text-sm font-medium text-blue-50 md:text-base">从洞察到报告，一站式智能生成</p>
+          </div>
+        </section>
 
-      <div className="mx-auto flex w-full max-w-[1480px] flex-1 flex-col gap-6 overflow-y-auto p-8">
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {overviewItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => onNavigate("projectList")}
-              className={`group relative overflow-hidden rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md ${
-                item.label === "生成中" && generatingCount > 0
-                  ? "border-blue-200 bg-blue-50/70 shadow-blue-100"
-                  : "border-slate-200 bg-white"
-              }`}
-            >
-              <div className={`absolute inset-x-0 top-0 h-0.5 ${
-                item.label === "生成中" && generatingCount > 0 ? "bg-blue-600" : "bg-slate-100 group-hover:bg-blue-500"
-              }`} />
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="text-sm font-semibold text-slate-600">{item.label}</span>
-                  <div className="mt-2 text-2xl font-bold tracking-tight text-gray-900">{item.value}</div>
-                </div>
-                <span className={`flex h-9 w-9 items-center justify-center rounded-lg border ${
-                  item.label === "生成中" && generatingCount > 0
-                    ? "border-blue-200 bg-blue-600 text-white"
-                    : "border-blue-100 bg-blue-50 text-blue-600"
-                }`}>
-                  <item.icon size={17} className={item.label === "生成中" && generatingCount > 0 ? "animate-spin" : ""} />
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+          {workflowItems.map((item, index) => (
+            <div key={item.step} className="relative">
+              <WorkflowCard {...item} />
+              {index < workflowItems.length - 1 && (
+                <span className="pointer-events-none absolute -right-6 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-[#f5f8fd] text-blue-600 xl:flex">
+                  <ArrowRight size={27} strokeWidth={3} />
                 </span>
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                <span>{item.desc}</span>
-                {item.label === "生成中" && generatingCount > 0 && (
-                  <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">正在运行</span>
-                )}
-              </div>
-            </button>
+              )}
+            </div>
           ))}
         </section>
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,0.75fr)]">
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
-              <div>
-                <h2 className="text-base font-bold text-gray-900">待处理项目</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate("projectList")}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
-              >
-                查看全部
-                <ArrowRight size={15} />
-              </button>
-            </div>
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {statItems.map((item, index) => (
+            <StatCard
+              key={item.title}
+              {...item}
+              detail={index === 0 ? `${projects.length} 个当前项目` : index === 1 ? `${enabledTemplateCount} 个可用模板` : index === 2 ? `${totalQuestionCount} 个问题项` : "较上周"}
+            />
+          ))}
+        </section>
 
-            {continueProjects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600">
-                  <PlusCircle size={22} />
-                </div>
-                <h3 className="mt-4 text-base font-bold text-gray-900">还没有项目</h3>
-                <p className="mt-1 text-sm text-slate-500">先新建一个报告项目，后续进度会显示在这里。</p>
-                <button
-                  type="button"
-                  onClick={onNewProject}
-                  className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
-                >
-                  <PlusCircle size={16} />
-                  新建报告项目
-                </button>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {continueProjects.map(({ project, status }) => {
-                  const meta = statusStyle[status];
-                  const ProjectIcon = status === "generating" ? RefreshCw : project.icon;
-                  const projectDescription = project.reportStage || meta.description;
-
-                  return (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => openProject(project, status)}
-                      className={`group relative grid w-full grid-cols-1 gap-3 px-5 py-4 text-left transition-all md:grid-cols-[auto_minmax(0,1fr)_minmax(150px,auto)_auto] md:items-center ${meta.rowClassName}`}
-                    >
-                      {status === "generating" && <span className="absolute inset-y-0 left-0 w-1 bg-blue-600" />}
-                      <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border md:flex ${meta.iconClassName}`}>
-                        <ProjectIcon size={20} className={status === "generating" ? "animate-spin" : ""} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <h3 className="truncate text-sm font-bold text-slate-900">{project.title}</h3>
-                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${meta.badgeClassName}`}>
-                            {status === "generating" ? "正在生成" : getReportProjectStatusLabel(status)}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                          <span>{project.companyName || "未填写企业"}</span>
-                        </div>
-                        <p className="mt-2 line-clamp-1 text-sm leading-6 text-slate-600">
-                          {projectDescription}
-                        </p>
-                      </div>
-                      <div className="text-xs text-slate-500 md:text-right">
-                        {project.createdAt}
-                      </div>
-                      <div className="flex items-center justify-between gap-3 md:justify-end">
-                        <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all group-hover:border-blue-200 group-hover:text-blue-700">
-                          {meta.action}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+        <section className="rounded-2xl bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70">
+          <div className="mb-3 flex items-center justify-between px-2 py-1">
+            <h2 className="text-base font-bold text-slate-900">最近处理的项目</h2>
+            <button
+              type="button"
+              onClick={() => onNavigate("projectList")}
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-600 transition hover:text-blue-700"
+            >
+              查看全部项目
+              <ArrowRight size={17} />
+            </button>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4">
-              <h2 className="text-base font-bold text-gray-900">快捷入口</h2>
-            </div>
-            <div className="space-y-3 p-5">
-              <ResourceCard
-                icon={FileText}
-                title="报告样例"
-                value={`${templates.length} 份`}
-                desc={`${enabledTemplateCount} 份可用于新建项目`}
-                action="打开"
-                onClick={() => onNavigate("templates")}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            {recentProjects.map((projectCard) => (
+              <ProjectCard
+                key={projectCard.title}
+                {...projectCard}
+                onClick={() => openProject(projectCard.project, projectCard.status)}
               />
-              <ResourceCard
-                icon={Layers}
-                title="问题清单"
-                value={`${questionCollections.length} 套`}
-                desc={`${totalQuestionCount} 个问题可直接选用`}
-                action="打开"
-                onClick={() => onNavigate("questionLists")}
-              />
-              <ResourceCard
-                icon={Mic}
-                title="我的录音"
-                value="录音资料"
-                desc="查看访谈录音和转写内容"
-                action="打开"
-                onClick={() => onNavigate("recordings")}
-              />
-            </div>
+            ))}
           </div>
         </section>
       </div>
@@ -331,33 +280,118 @@ export const HomeView: React.FC<HomeViewProps> = ({
   );
 };
 
-const ResourceCard: React.FC<{
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+const WorkflowCard: React.FC<{
+  step: string;
+  title: string;
+  icon: LucideIcon;
+}> = ({ step, title, icon: Icon }) => (
+  <div className="flex min-h-[82px] items-center gap-3.5 rounded-xl bg-white px-4 shadow-[0_8px_22px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70">
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white shadow-md shadow-blue-200">
+      {step}
+    </span>
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+      <Icon size={25} strokeWidth={2.4} />
+    </span>
+    <h3 className="whitespace-nowrap text-sm font-medium tracking-normal text-slate-800">{title}</h3>
+  </div>
+);
+
+const StatCard: React.FC<{
   title: string;
   value: string;
-  desc: string;
-  action: string;
-  onClick: () => void;
-}> = ({ icon: Icon, title, value, desc, action, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="group flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-blue-200 hover:bg-blue-50/30"
-  >
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-blue-600 group-hover:border-blue-100 group-hover:bg-blue-50">
-      <Icon size={18} />
+  change: string;
+  detail: string;
+  icon: LucideIcon;
+}> = ({ title, value, change, detail, icon: Icon }) => (
+  <div className="relative min-h-[108px] overflow-hidden rounded-xl bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70">
+    <div className="flex items-center gap-4">
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200">
+      <Icon size={24} strokeWidth={2.2} />
+    </span>
+    <div className="min-w-0 pr-16">
+      <p className="whitespace-nowrap text-xs font-bold text-slate-500">{title}</p>
+      <div className="mt-1 text-3xl font-bold leading-none tracking-normal text-slate-900">{value}</div>
+      <div className="mt-2.5 flex items-center gap-2 whitespace-nowrap text-xs">
+        <span className="font-bold text-emerald-600">↑ {change}</span>
+        <span className="text-slate-400">{detail}</span>
+      </div>
     </div>
-    <div className="min-w-0 flex-1">
+    </div>
+    <div className="absolute bottom-4 right-4">
+      <Sparkline />
+    </div>
+  </div>
+);
+
+const Sparkline: React.FC = () => (
+  <div className="hidden h-9 w-16 shrink-0 items-end lg:flex 2xl:w-20">
+    <svg viewBox="0 0 96 48" className="h-full w-full" fill="none" aria-hidden="true">
+      <path
+        d="M2 39 L15 24 L28 32 L42 10 L58 20 L72 4 L86 15 L94 9"
+        stroke="#2563eb"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </div>
+);
+
+const ProjectCard: React.FC<{
+  title: string;
+  industry: string;
+  phase: string;
+  progress: number;
+  updatedAt: string;
+  status: ReportProjectStatus;
+  icon: LucideIcon;
+  onClick: () => void;
+}> = ({ title, industry, phase, progress, updatedAt, status, icon: Icon, onClick }) => {
+  const meta = statusMeta[status];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex min-h-[218px] flex-col rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200/80 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-blue-200"
+    >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-900">{title}</p>
-          <p className="mt-1 text-lg font-bold tracking-tight text-gray-900">{value}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-100">
+            <Icon size={20} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-xs font-bold text-slate-900">{title}</h3>
+            <p className="mt-1 text-xs font-medium text-slate-400">{industry}</p>
+          </div>
         </div>
-        <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 transition-colors group-hover:border-blue-200 group-hover:text-blue-700">
-          {action}
+        <MoreVertical size={18} className="shrink-0 text-slate-300" />
+      </div>
+
+      <div className="mt-5">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-bold text-slate-400">当前阶段</span>
+          <span className={`rounded-md px-2.5 py-1 font-bold ${meta.chipClassName}`}>{phase}</span>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="w-10 text-right text-sm font-bold text-slate-700">{progress}%</span>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <p className="text-xs font-bold text-slate-400">更新时间</p>
+        <p className="mt-1.5 text-sm font-medium text-slate-500">{updatedAt}</p>
+      </div>
+
+      <div className="mt-auto flex justify-center pt-3">
+        <span className={`inline-flex min-w-16 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-bold ${meta.buttonClassName}`}>
+          {status === "generated" && <Check size={15} className="mr-1" />}
+          {meta.label}
         </span>
       </div>
-      <p className="mt-2 text-xs leading-5 text-slate-500">{desc}</p>
-    </div>
-  </button>
-);
+    </button>
+  );
+};
