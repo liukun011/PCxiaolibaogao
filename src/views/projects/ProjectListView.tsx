@@ -107,6 +107,7 @@ export const ProjectListView = ({
   projects,
   setProjects,
   createRequest = 0,
+  onCreateRequestHandled,
 }: {
   onSelectProject: (project: ReportProject) => void,
   onStartIntelligence: () => void,
@@ -114,6 +115,7 @@ export const ProjectListView = ({
   projects: ReportProject[],
   setProjects: React.Dispatch<React.SetStateAction<ReportProject[]>>,
   createRequest?: number,
+  onCreateRequestHandled?: () => void,
 }) => {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [showDirectNewModal, setShowDirectNewModal] = useState(false);
@@ -157,8 +159,9 @@ export const ProjectListView = ({
   useEffect(() => {
     if (createRequest > 0) {
       setShowDirectNewModal(true);
+      onCreateRequestHandled?.();
     }
-  }, [createRequest]);
+  }, [createRequest, onCreateRequestHandled]);
 
   const handleCreateProject = () => {
     if (!customProjectName.trim()) {

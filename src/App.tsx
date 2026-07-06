@@ -534,6 +534,7 @@ export default function App() {
             projects={projects}
             setProjects={setProjects}
             createRequest={projectListCreateRequest}
+            onCreateRequestHandled={() => setProjectListCreateRequest(0)}
             onStartIntelligence={() => {
               setIntelligenceSource("projectList");
               setIntelligenceInitialStep("input");
