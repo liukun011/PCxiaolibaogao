@@ -19,6 +19,10 @@ import {
   type ReportProjectStatus,
 } from "./shared/projectData";
 import heroVisual from "./assets/home-hero-visual.png";
+import scenarioCredit from "./assets/scenarios/scenario-credit.png";
+import scenarioLeasing from "./assets/scenarios/scenario-leasing.png";
+import scenarioNpl from "./assets/scenarios/scenario-npl.png";
+import scenarioResearch from "./assets/scenarios/scenario-research.png";
 
 type HomeNavigationTarget = "projectList" | "templates" | "questionLists" | "recordings";
 
@@ -59,26 +63,35 @@ const workflowItems = [
 
 const scenarioItems = [
   {
-    title: "信贷尽调",
-    desc: "适用于授信审批、流动资金贷款、续贷复核等场景，辅助梳理企业资质、经营情况、现金流与还款能力。",
-    icon: ClipboardCheck,
+    title: "银行信贷报告",
+    desc: "用于贷款审批、授信决策及企业深度分析，辅助梳理经营情况、影像风险，强化信贷决策能力。",
+    theme: "credit",
+    imageSrc: scenarioCredit,
   },
   {
-    title: "投资尽调",
-    desc: "适用于股权投资、并购评估与项目立项前调研，聚焦商业模式、团队能力、财务表现与潜在风险。",
-    icon: BriefcaseBusiness,
+    title: "融资租赁报告",
+    desc: "适用于企业融资、租赁资质评估与交易结构分析，判断租赁物、租用人经营状况、偿债风险。",
+    theme: "lease",
+    imageSrc: scenarioLeasing,
   },
   {
-    title: "融资尽调",
-    desc: "适用于企业融资、融资租赁、担保审核等场景，帮助整理融资主体信息、资金用途、偿债来源与风控要点。",
-    icon: Layers3,
+    title: "不良资产尽调报告",
+    desc: "用于不良资产评估、催收方案制定与风险处置，识别债务与资产风险状况，发掘潜在价值与回收空间。",
+    theme: "distressed",
+    imageSrc: scenarioNpl,
   },
   {
-    title: "不良资产",
-    desc: "适用于不良资产评估、债权处置与风险化解，辅助分析债务关系、资产线索、处置路径与回收可能性。",
-    icon: FileText,
+    title: "投研报告",
+    desc: "用于行业研究、投资分析与标的企业跟踪，聚焦企业经营状况与前景，助力投资决策优化。",
+    theme: "research",
+    imageSrc: scenarioResearch,
   },
-];
+] satisfies Array<{
+  title: string;
+  desc: string;
+  theme: "credit" | "lease" | "distressed" | "research";
+  imageSrc: string;
+}>;
 
 export const HomeView: React.FC<HomeViewProps> = ({
   projects,
@@ -190,16 +203,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </section>
 
         <section className="shrink-0 rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.055)] ring-1 ring-slate-200/70">
-          <div className="mb-3 flex items-end justify-between gap-4 px-1">
+          <div className="mb-4 flex items-end justify-between gap-4 px-1">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">适用场景</h2>
-              <p className="mt-1 text-xs font-medium text-slate-500">
-                覆盖信贷、投资、融资、不良资产等多类尽调工作
-              </p>
+              <h2 className="text-base font-bold text-slate-900">适用场景</h2>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-3 xl:gap-4">
             {scenarioItems.map((item) => (
               <ScenarioCard key={item.title} {...item} />
             ))}
@@ -306,16 +316,50 @@ const StatCard: React.FC<{
 const ScenarioCard: React.FC<{
   title: string;
   desc: string;
-  icon: LucideIcon;
-}> = ({ title, desc, icon: Icon }) => (
-  <div className="flex h-full min-h-[158px] flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.045)] transition-colors hover:border-blue-200 hover:bg-blue-50/20">
-    <span className="mb-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-blue-100">
-      <Icon size={20} strokeWidth={2} />
-    </span>
-    <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-    <p className="mt-2 text-xs font-medium leading-5 text-slate-500">{desc}</p>
-  </div>
-);
+  theme: "credit" | "lease" | "distressed" | "research";
+  imageSrc: string;
+}> = ({ title, desc, theme, imageSrc }) => {
+  const themeClass = {
+    credit: {
+      card: "border-blue-200/80 bg-gradient-to-br from-[#eef7ff] via-white to-[#eaf3ff]",
+      title: "text-blue-900",
+      glow: "bg-blue-200/20",
+    },
+    lease: {
+      card: "border-violet-200/80 bg-gradient-to-br from-[#f4efff] via-white to-[#f0e8ff]",
+      title: "text-violet-950",
+      glow: "bg-violet-200/20",
+    },
+    distressed: {
+      card: "border-orange-200/80 bg-gradient-to-br from-[#fff1e9] via-white to-[#fff4ef]",
+      title: "text-red-950",
+      glow: "bg-orange-200/20",
+    },
+    research: {
+      card: "border-emerald-200/80 bg-gradient-to-br from-[#f0faea] via-white to-[#f6fbec]",
+      title: "text-emerald-900",
+      glow: "bg-emerald-200/20",
+    },
+  }[theme];
+
+  return (
+    <div className={`group relative flex min-h-[168px] overflow-hidden rounded-xl border p-4 shadow-[0_8px_20px_rgba(15,23,42,0.055)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,23,42,0.09)] ${themeClass.card}`}>
+      <div className="absolute bottom-3 left-3 top-3 flex w-[46%] items-center justify-center rounded-2xl p-3">
+        <span className={`pointer-events-none absolute inset-4 rounded-full blur-2xl ${themeClass.glow}`} />
+        <img
+          src={imageSrc}
+          alt=""
+          className="relative z-10 max-h-[132px] max-w-[156px] object-contain drop-shadow-[0_14px_18px_rgba(15,23,42,0.12)]"
+          draggable={false}
+        />
+      </div>
+      <div className="relative z-10 ml-auto flex w-[48%] min-w-0 flex-col justify-center">
+        <h3 className={`text-base font-bold leading-6 ${themeClass.title}`}>{title}</h3>
+        <p className="mt-3 text-xs font-medium leading-5 text-slate-700">{desc}</p>
+      </div>
+    </div>
+  );
+};
 
 const Sparkline: React.FC = () => (
   <svg viewBox="0 0 96 48" className="h-full w-full" fill="none" aria-hidden="true">
