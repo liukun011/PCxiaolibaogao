@@ -639,12 +639,6 @@ export default function App() {
               setStandaloneShell(true);
               setCurrentView("templateAiUpdate");
             }}
-            onUseAgentGenerateReport={(template) => {
-              setSelectedTemplate(template);
-              setIsNewTemplatePreview(false);
-              setStandaloneShell(true);
-              setCurrentView("templateAgentGenerate");
-            }}
           />
         )}
 

@@ -129,13 +129,11 @@ export const TemplatesView = ({
   setTemplates,
   onOpenTemplate,
   onOpenAIUpdateTemplate,
-  onUseAgentGenerateReport,
 }: {
   templates: TemplateItem[];
   setTemplates: React.Dispatch<React.SetStateAction<TemplateItem[]>>;
   onOpenTemplate: (template: TemplateItem, isNew?: boolean) => void;
   onOpenAIUpdateTemplate: (template: TemplateItem) => void;
-  onUseAgentGenerateReport: (template: TemplateItem) => void;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sampleInputRef = useRef<HTMLInputElement>(null);
@@ -641,20 +639,6 @@ export const TemplatesView = ({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (isParsing) return;
-                        onUseAgentGenerateReport(template);
-                      }}
-                      disabled={isParsing}
-                      className={`group/action relative rounded-lg p-1.5 transition-colors ${isParsing ? "cursor-not-allowed text-gray-300" : "text-blue-600 hover:bg-blue-50"}`}
-                    >
-                      <FileText size={16} />
-                      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg group-hover/action:block">
-                        使用智能体生成报告
-                      </span>
-                    </button>
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
