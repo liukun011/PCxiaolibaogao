@@ -57,6 +57,29 @@ const workflowItems = [
   { step: "5", title: "AI生成报告", desc: "查看编辑下载", icon: BriefcaseBusiness },
 ];
 
+const scenarioItems = [
+  {
+    title: "信贷尽调",
+    desc: "适用于授信审批、流动资金贷款、续贷复核等场景，辅助梳理企业资质、经营情况、现金流与还款能力。",
+    icon: ClipboardCheck,
+  },
+  {
+    title: "投资尽调",
+    desc: "适用于股权投资、并购评估与项目立项前调研，聚焦商业模式、团队能力、财务表现与潜在风险。",
+    icon: BriefcaseBusiness,
+  },
+  {
+    title: "融资尽调",
+    desc: "适用于企业融资、融资租赁、担保审核等场景，帮助整理融资主体信息、资金用途、偿债来源与风控要点。",
+    icon: Layers3,
+  },
+  {
+    title: "不良资产",
+    desc: "适用于不良资产评估、债权处置与风险化解，辅助分析债务关系、资产线索、处置路径与回收可能性。",
+    icon: FileText,
+  },
+];
+
 export const HomeView: React.FC<HomeViewProps> = ({
   projects,
   templates,
@@ -166,6 +189,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </section>
 
+        <section className="shrink-0 rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.055)] ring-1 ring-slate-200/70">
+          <div className="mb-3 flex items-end justify-between gap-4 px-1">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">适用场景</h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                覆盖信贷、投资、融资、不良资产等多类尽调工作
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-3">
+            {scenarioItems.map((item) => (
+              <ScenarioCard key={item.title} {...item} />
+            ))}
+          </div>
+        </section>
+
         <section className="shrink-0 rounded-2xl bg-white px-4 py-3 shadow-[0_8px_20px_rgba(15,23,42,0.055)] ring-1 ring-slate-200/70">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
             {workflowItems.map((item, index) => (
@@ -211,6 +251,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             ))}
           </div>
         </section>
+
       </div>
     </div>
   );
@@ -259,6 +300,20 @@ const StatCard: React.FC<{
     <div className="absolute bottom-4 right-4 hidden h-8 w-16 items-end lg:flex 2xl:w-20">
       <Sparkline />
     </div>
+  </div>
+);
+
+const ScenarioCard: React.FC<{
+  title: string;
+  desc: string;
+  icon: LucideIcon;
+}> = ({ title, desc, icon: Icon }) => (
+  <div className="flex h-full min-h-[158px] flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.045)] transition-colors hover:border-blue-200 hover:bg-blue-50/20">
+    <span className="mb-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+      <Icon size={20} strokeWidth={2} />
+    </span>
+    <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+    <p className="mt-2 text-xs font-medium leading-5 text-slate-500">{desc}</p>
   </div>
 );
 

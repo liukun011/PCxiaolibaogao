@@ -96,6 +96,8 @@ import { QuestionListView } from "./views/questionLists/QuestionListView";
 import { EditReportView } from "./views/report/EditReportView";
 import { TemplatePreviewView } from "./views/templates/TemplatePreviewView";
 import { TemplatesView } from "./views/templates/TemplatesView";
+import { AITemplateChatView } from "./views/templates/AITemplateChatView";
+import { TemplateAgentGenerateView } from "./views/templates/TemplateAgentGenerateView";
 import {
   INITIAL_TEMPLATE_ITEMS,
   TEMPLATE_OPTIONS,
@@ -130,6 +132,8 @@ export default function App() {
     | "dashboard"
     | "intelligence"
     | "templates"
+    | "templateAgentGenerate"
+    | "templateAiUpdate"
     | "templatePreview"
     | "questionLists"
     | "audit"
@@ -409,7 +413,7 @@ export default function App() {
     }, 6000);
   };
 
-  const showSidebar = !standaloneShell;
+  const showSidebar = !standaloneShell && currentView !== "templateAgentGenerate";
 
   return (
     <div className="flex h-screen bg-[#F5F7FA] font-sans overflow-hidden">
@@ -454,7 +458,7 @@ export default function App() {
           <SidebarItem
             icon={BookOpen}
             label="我的模板" // Changed label from "报告模板" to "我的模板" for consistency
-            active={currentView === "templates"}
+            active={currentView === "templates" || currentView === "templateAiUpdate" || currentView === "templatePreview"}
             onClick={() => {
               setStandaloneShell(false);
               setCurrentView("templates");
@@ -628,6 +632,38 @@ export default function App() {
                 setSelectedTemplate(template);
                 setIsNewTemplatePreview(true);
               }
+            }}
+            onOpenAIUpdateTemplate={(template) => {
+              setSelectedTemplate(template);
+              setIsNewTemplatePreview(false);
+              setStandaloneShell(true);
+              setCurrentView("templateAiUpdate");
+            }}
+            onUseAgentGenerateReport={(template) => {
+              setSelectedTemplate(template);
+              setIsNewTemplatePreview(false);
+              setStandaloneShell(true);
+              setCurrentView("templateAgentGenerate");
+            }}
+          />
+        )}
+
+        {currentView === "templateAgentGenerate" && selectedTemplate && (
+          <TemplateAgentGenerateView
+            template={selectedTemplate}
+            onBack={() => {
+              setStandaloneShell(false);
+              setCurrentView("templates");
+            }}
+          />
+        )}
+
+        {currentView === "templateAiUpdate" && selectedTemplate && (
+          <AITemplateChatView
+            template={selectedTemplate}
+            onBack={() => {
+              setStandaloneShell(false);
+              setCurrentView("templates");
             }}
           />
         )}

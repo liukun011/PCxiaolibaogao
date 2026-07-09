@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Search,
   Bell,
+  Bot,
   User,
   Ban,
   Mic,
@@ -95,14 +96,46 @@ import {
   type TemplateItem,
   type TemplateScope,
 } from "@/src/shared/templateData";
+
+const templateCategoryFilters = [
+  "全部",
+  "信贷尽调",
+  "不良资产",
+  "投资分析",
+  "风险审查",
+  "市场分析",
+  "经营分析",
+  "行业研究",
+  "产品调研",
+  "供应商评估",
+  "招商引资",
+];
+
+const getPrototypeTemplateCategory = (template: TemplateItem) => {
+  if (template.category === "bank") return "信贷尽调";
+  if (template.category === "equity") return "投资分析";
+  if (template.name.includes("不良")) return "不良资产";
+  if (template.name.includes("风险")) return "风险审查";
+  if (template.name.includes("市场")) return "市场分析";
+  if (template.name.includes("行业")) return "行业研究";
+  if (template.name.includes("产品")) return "产品调研";
+  if (template.name.includes("供应商")) return "供应商评估";
+  if (template.name.includes("招商")) return "招商引资";
+  return "经营分析";
+};
+
 export const TemplatesView = ({
   templates,
   setTemplates,
   onOpenTemplate,
+  onOpenAIUpdateTemplate,
+  onUseAgentGenerateReport,
 }: {
   templates: TemplateItem[];
   setTemplates: React.Dispatch<React.SetStateAction<TemplateItem[]>>;
   onOpenTemplate: (template: TemplateItem, isNew?: boolean) => void;
+  onOpenAIUpdateTemplate: (template: TemplateItem) => void;
+  onUseAgentGenerateReport: (template: TemplateItem) => void;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sampleInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +172,8 @@ export const TemplatesView = ({
     name: string;
     description: string;
   }>({ isOpen: false, template: null, category: TEMPLATE_OPTIONS[0].id, name: "", description: "" });
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("全部");
+  const [moreMenuTemplateId, setMoreMenuTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -147,12 +182,17 @@ export const TemplatesView = ({
     };
   }, []);
 
-  const filteredTemplates = templates.filter((template) =>
-    [template.name, template.description, template.uploader, template.category, getTemplateScopeTitle(template.applicationScope)]
+  const filteredTemplates = templates.filter((template) => {
+    const prototypeCategory = getPrototypeTemplateCategory(template);
+    const matchesCategory =
+      selectedCategoryFilter === "全部" || prototypeCategory === selectedCategoryFilter;
+    const matchesSearch = [template.name, template.description, template.uploader, template.category, prototypeCategory, getTemplateScopeTitle(template.applicationScope)]
       .join(" ")
       .toLowerCase()
-      .includes(searchKeyword.trim().toLowerCase()),
-  );
+      .includes(searchKeyword.trim().toLowerCase());
+
+    return matchesCategory && matchesSearch;
+  });
 
   const handleUploadClick = () => {
     setUploadModal({
@@ -465,9 +505,12 @@ export const TemplatesView = ({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-slate-50 p-8">
-      <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-base font-bold text-gray-800">报告模板</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            沉淀成熟报告结构，快速复用高质量业务模板
+          </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative">
@@ -497,6 +540,28 @@ export const TemplatesView = ({
         </div>
       </div>
 
+      <div className="mb-5 overflow-x-auto pb-1">
+        <div className="flex min-w-max items-center gap-2">
+          {templateCategoryFilters.map((category) => {
+            const isActive = selectedCategoryFilter === category;
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setSelectedCategoryFilter(category)}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-100"
+                    : "bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:ring-blue-100"
+                }`}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredTemplates.map((template) => {
@@ -507,7 +572,7 @@ export const TemplatesView = ({
                 onClick={() => {
                   if (!isParsing) onOpenTemplate(template);
                 }}
-                className={`group flex h-56 flex-col rounded-2xl border p-6 transition-all ${
+                className={`group relative flex h-56 flex-col rounded-2xl border p-6 transition-all ${
                   isParsing
                     ? "border-gray-200 bg-gray-50/50 cursor-not-allowed"
                     : template.status === "enabled"
@@ -575,43 +640,96 @@ export const TemplatesView = ({
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
                         if (isParsing) return;
-                        openConfirmModal(template.status === "enabled" ? "disable" : "enable", template);
+                        onUseAgentGenerateReport(template);
                       }}
                       disabled={isParsing}
-                      className={`rounded-md p-1.5 transition-colors ${isParsing ? "text-gray-300 cursor-not-allowed" : template.status === "enabled" ? "text-amber-500 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
-                      title={template.status === "enabled" ? "禁用模板" : "启用模板"}
+                      className={`group/action relative rounded-lg p-1.5 transition-colors ${isParsing ? "cursor-not-allowed text-gray-300" : "text-blue-600 hover:bg-blue-50"}`}
                     >
-                      {template.status === "enabled" ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                      <FileText size={16} />
+                      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg group-hover/action:block">
+                        使用智能体生成报告
+                      </span>
                     </button>
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
                         if (isParsing) return;
-                        openEditModal(template);
+                        onOpenAIUpdateTemplate(template);
                       }}
                       disabled={isParsing}
-                      className={`rounded-md p-1.5 transition-colors ${isParsing ? "text-gray-300 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50"}`}
-                      title="编辑模板"
+                      className={`group/action relative rounded-lg p-1.5 transition-colors ${isParsing ? "cursor-not-allowed text-gray-300" : "text-slate-600 hover:bg-slate-100 hover:text-blue-600"}`}
                     >
-                      <Edit3 size={16} />
+                      <Bot size={16} />
+                      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg group-hover/action:block">
+                        修改模板
+                      </span>
                     </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (isParsing) return;
-                        openConfirmModal("delete", template);
+                    <div
+                      className="relative"
+                      onMouseLeave={() => {
+                        if (moreMenuTemplateId === template.id) {
+                          setMoreMenuTemplateId(null);
+                        }
                       }}
-                      disabled={isParsing}
-                      className={`rounded-md p-1.5 transition-colors ${isParsing ? "text-gray-300 cursor-not-allowed" : "text-red-500 hover:bg-red-50"}`}
-                      title="删除模板"
                     >
-                      <Trash2 size={16} />
-                    </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (isParsing) return;
+                          setMoreMenuTemplateId((current) => (current === template.id ? null : template.id));
+                        }}
+                        disabled={isParsing}
+                        className={`rounded-lg p-1.5 transition-colors ${isParsing ? "cursor-not-allowed text-gray-300" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"}`}
+                        aria-label="更多操作"
+                      >
+                        <MoreHorizontal size={17} />
+                      </button>
+                      {moreMenuTemplateId === template.id && !isParsing && (
+                        <div
+                          onClick={(event) => event.stopPropagation()}
+                          className="absolute bottom-full right-0 z-40 mb-2 w-36 rounded-xl border border-gray-100 bg-white p-1.5 shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMoreMenuTemplateId(null);
+                              openConfirmModal(template.status === "enabled" ? "disable" : "enable", template);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                          >
+                            {template.status === "enabled" ? <Ban size={14} /> : <CheckCircle2 size={14} />}
+                            <span>{template.status === "enabled" ? "禁用" : "启用"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMoreMenuTemplateId(null);
+                              openEditModal(template);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                          >
+                            <Edit3 size={14} />
+                            <span>编辑</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMoreMenuTemplateId(null);
+                              openConfirmModal("delete", template);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            <Trash2 size={14} />
+                            <span>删除</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
