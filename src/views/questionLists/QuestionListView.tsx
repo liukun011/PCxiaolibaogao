@@ -210,7 +210,7 @@ export const QuestionListView = ({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-8 py-4 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-8 pb-4 pt-8 backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold leading-7 tracking-normal text-slate-900">问题清单</h1>
