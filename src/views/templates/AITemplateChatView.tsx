@@ -205,7 +205,7 @@ export const AITemplateChatView = ({
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 className="min-h-[76px] w-full resize-none bg-transparent px-2 py-2 text-base leading-7 text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="今天帮你做些什么？ / 调用技能"
+                placeholder="请输入模板修改建议"
               />
               <div className="mt-3 flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
                 <div className="flex shrink-0 items-center gap-2">
