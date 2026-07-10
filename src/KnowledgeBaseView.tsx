@@ -7,7 +7,7 @@ type KnowledgeBaseViewProps = {
 
 export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = () => {
   return (
-    <div className="flex flex-col flex-1 bg-white px-8 py-6">
+    <div className="flex flex-col flex-1 bg-white px-8 pb-6 pt-8">
       <div className="flex items-center gap-3 text-slate-900">
         <BookOpen size={24} className="text-slate-700" />
         <h1 className="text-xl font-bold leading-7 tracking-normal text-slate-900">知识库</h1>

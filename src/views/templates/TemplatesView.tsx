@@ -502,7 +502,7 @@ export const TemplatesView = ({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-slate-50 p-8">
+    <div className="flex h-full flex-col overflow-hidden bg-white p-8">
       <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-xl font-bold leading-7 tracking-normal text-slate-900">报告模板</h1>
