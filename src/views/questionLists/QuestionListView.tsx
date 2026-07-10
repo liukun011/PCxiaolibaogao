@@ -331,7 +331,7 @@ export const QuestionListView = ({
                     setShowCreateForm(false);
                   }}
                   disabled={!activeCollection}
-                  className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition-all ${showAddQuestionForm ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-white text-amber-600 hover:bg-amber-50"} disabled:cursor-not-allowed disabled:opacity-50`}
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition-all ${showAddQuestionForm ? "border-blue-600 bg-blue-600 text-white shadow-sm shadow-blue-100" : "border-blue-200 bg-white text-blue-600 hover:bg-blue-50"} disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   <Plus size={16} />
                   <span>新增问题</span>
@@ -348,8 +348,8 @@ export const QuestionListView = ({
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden border-b border-gray-100"
                   >
-                    <div className="space-y-3 bg-amber-50/40 p-5">
-                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-700">
+                    <div className="space-y-3 bg-blue-50/35 p-5">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
                         <Plus size={14} />
                         <span>新增问题</span>
                       </div>
@@ -366,7 +366,7 @@ export const QuestionListView = ({
                           }
                         }}
                         placeholder="输入问题内容..."
-                        className="w-full resize-none rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                        className="w-full resize-none rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                       />
                       <div className="flex justify-end gap-2">
                         <button
@@ -381,14 +381,14 @@ export const QuestionListView = ({
                         <button
                           onClick={handleAddQuestionAndClose}
                           disabled={!newQuestionText.trim()}
-                          className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-700 transition-all hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition-all hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           保存
                         </button>
                         <button
                           onClick={handleAddQuestion}
                           disabled={!newQuestionText.trim()}
-                          className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-blue-100 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           保存并继续新增
                         </button>
