@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BriefcaseBusiness,
+  ChevronDown,
   Clock,
   ClipboardCheck,
   FileText,
@@ -10,9 +11,12 @@ import {
   RefreshCw,
   User,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import type { QuestionCollection, TemplateItem } from "./shared/templateData";
+import { TEMPLATE_OPTIONS } from "./shared/templateData";
 import {
   getReportProjectStatus,
   type ReportProject,
@@ -31,7 +35,7 @@ type HomeViewProps = {
   templates: TemplateItem[];
   questionCollections: QuestionCollection[];
   onNavigate: (target: HomeNavigationTarget) => void;
-  onNewProject: () => void;
+  onCreateProject: (projectName: string, companyName: string, template: string) => void;
   onOpenReport: (report: ReportProject) => void;
 };
 
@@ -98,9 +102,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
   templates,
   questionCollections,
   onNavigate,
-  onNewProject,
+  onCreateProject,
   onOpenReport,
 }) => {
+  const [showDirectNewModal, setShowDirectNewModal] = useState(false);
+  const [customProjectName, setCustomProjectName] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("bank");
   const [generatedReportIds, setGeneratedReportIds] = useState<string[]>(() => {
     try {
       return JSON.parse(window.localStorage.getItem("generatedReportIds") || "[]");
@@ -177,6 +186,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
     });
   };
 
+  const handleCreateProject = () => {
+    const trimmedProjectName = customProjectName.trim();
+    if (!trimmedProjectName) {
+      return;
+    }
+
+    onCreateProject(trimmedProjectName, newProjectName.trim(), selectedTemplate);
+    setShowDirectNewModal(false);
+    setCustomProjectName("");
+    setNewProjectName("");
+    setNewProjectDescription("");
+    setSelectedTemplate("bank");
+  };
+
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-[#f6f9ff] p-3 text-slate-900 sm:p-4 xl:p-5">
       <div className="flex min-h-full w-full flex-col gap-3">
@@ -193,7 +216,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="mt-4 text-sm font-medium text-slate-700">选择样例、整理资料，一键生成尽调报告</p>
             <button
               type="button"
-              onClick={onNewProject}
+              onClick={() => setShowDirectNewModal(true)}
               className="mt-5 inline-flex h-9 items-center gap-3 rounded-full bg-blue-600 px-5 text-sm font-medium text-white shadow-[0_10px_18px_rgba(37,99,235,0.18)] transition hover:bg-blue-700 sm:mt-6 xl:mt-6"
             >
               开始新报告
@@ -263,6 +286,121 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </section>
 
       </div>
+
+      <AnimatePresence>
+        {showDirectNewModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDirectNewModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+            >
+              <div className="space-y-6 p-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-gray-900">新建报告项目</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectNewModal(false)}
+                    className="rounded-full p-2 transition-colors hover:bg-gray-100"
+                  >
+                    <X size={20} className="text-gray-400" />
+                  </button>
+                </div>
+
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="ml-1 text-sm font-bold text-gray-700">
+                        名称 <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={customProjectName}
+                        onChange={(event) => setCustomProjectName(event.target.value)}
+                        placeholder="例如：2024Q3小狸科技流贷尽调方案"
+                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-3 font-medium text-gray-900 placeholder:text-gray-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="ml-1 text-sm font-bold text-gray-700">企业名称</label>
+                      <input
+                        type="text"
+                        value={newProjectName}
+                        onChange={(event) => setNewProjectName(event.target.value)}
+                        placeholder="请输入企业名称或信用代码（选填）"
+                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-3 font-medium text-gray-900 placeholder:text-gray-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="ml-1 text-sm font-bold text-gray-700">描述</label>
+                      <textarea
+                        value={newProjectDescription}
+                        onChange={(event) => setNewProjectDescription(event.target.value)}
+                        placeholder="请输入报告项目描述（选填）"
+                        rows={3}
+                        className="w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-5 py-3 font-medium leading-6 text-gray-900 placeholder:text-gray-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="ml-1 text-sm font-bold text-gray-700">请选择报告模板</label>
+                    <div className="relative">
+                      <select
+                        value={selectedTemplate}
+                        onChange={(event) => setSelectedTemplate(event.target.value)}
+                        className="w-full cursor-pointer appearance-none rounded-2xl border border-gray-200 bg-gray-50 px-5 py-3 pr-10 font-medium text-gray-900 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      >
+                        {TEMPLATE_OPTIONS.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.title} - {template.desc}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-gray-400">
+                        <ChevronDown size={18} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 border-t border-gray-100 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowDirectNewModal(false)}
+                      className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateProject}
+                      disabled={!customProjectName.trim()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      新建 <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

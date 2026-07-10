@@ -248,23 +248,23 @@ export const ProjectListView = ({
   return (
     <div className="flex-1 flex flex-col bg-white">
       {/* Header */}
-      <header className="h-16 px-8 flex items-center justify-between border-b border-gray-100 shrink-0">
-        <h1 className="text-base font-bold text-gray-800">报告管理</h1>
-        <div className="flex items-center gap-4">
+      <header className="flex shrink-0 items-center justify-between px-8 pb-4 pt-8">
+        <h1 className="text-xl font-bold leading-7 tracking-normal text-slate-900">报告管理</h1>
+        <div className="flex items-center gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
               placeholder="请搜索尽调项目"
-              className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="h-10 w-72 rounded-xl border border-gray-200 bg-white py-2 pl-4 pr-10 text-sm font-medium text-gray-700 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           </div>
           <div className="relative">
             <button
               onClick={() => {
                 setShowDirectNewModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition-colors hover:bg-blue-700"
             >
               <PlusCircle size={16} />
               <span>新建报告项目</span>
@@ -459,7 +459,7 @@ export const ProjectListView = ({
         )}
       </AnimatePresence>
 
-      <div className="p-8 space-y-8">
+      <div className="space-y-8 px-8 pb-8 pt-4">
         {/* Tabs */}
         <div className="flex items-center justify-between">
           <div className="flex items-center p-1 bg-gray-100 rounded-lg w-fit">
