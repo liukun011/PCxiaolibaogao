@@ -413,6 +413,77 @@ export default function App() {
     }, 6000);
   };
 
+  const handleDirectNewProject = (
+    projectName: string,
+    name: string,
+    template: string,
+    initialQs: any[],
+    targetType?: string,
+    targetCode?: string,
+    enableAI?: boolean,
+  ) => {
+    const hasCompanyName = Boolean(name.trim());
+    const shouldStartBackgroundAI = enableAI !== false && hasCompanyName;
+    const initRes = {
+      projectName,
+      companyName: name,
+      targetType: targetType || "company",
+      targetCode: targetCode || "",
+      isSkip: !shouldStartBackgroundAI,
+      isPending: shouldStartBackgroundAI,
+      template,
+      questions: initialQs,
+    };
+    setStandaloneShell(false);
+    setCurrentView("dashboard");
+    if (shouldStartBackgroundAI) {
+      handleStartBackgroundAI(initRes);
+    } else {
+      setIntelligenceResult(initRes);
+      setIsBackgroundAnalyzing(false);
+      setHasBackgroundResult(false);
+    }
+  };
+
+  const handleCreateProjectFromHome = (projectName: string, companyName: string, template: string) => {
+    const trimmedProjectName = projectName.trim();
+    const trimmedCompanyName = companyName.trim();
+
+    setProjects((previous) => [
+      {
+        id: Math.max(0, ...previous.map((project) => project.id)) + 1,
+        title: trimmedProjectName,
+        companyName: trimmedCompanyName || "未填写企业",
+        desc: trimmedCompanyName
+          ? `企业名称为“${trimmedCompanyName}”，已创建报告项目，待补充资料并生成报告。`
+          : "已创建报告项目，待补充企业信息、资料和问题清单后生成报告。",
+        createdBy: "当前用户",
+        createdAt: new Date().toLocaleString("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).replace(/\//g, "-"),
+        icon: ClipboardCheck,
+        reportGenerated: false,
+      },
+      ...previous,
+    ]);
+
+    handleDirectNewProject(
+      trimmedProjectName,
+      trimmedCompanyName,
+      template,
+      [...TEMPLATE_QUESTION_SETS[template]],
+      "company",
+      "",
+      true,
+    );
+  };
+
   const showSidebar = !standaloneShell && currentView !== "templateAgentGenerate";
 
   return (
@@ -524,11 +595,7 @@ export default function App() {
               setStandaloneShell(false);
               setCurrentView(target);
             }}
-            onNewProject={() => {
-              setStandaloneShell(false);
-              setProjectListCreateRequest((previous) => previous + 1);
-              setCurrentView("projectList");
-            }}
+            onCreateProject={handleCreateProjectFromHome}
             onOpenReport={openDashboardInNewTab}
           />
         )}
@@ -544,29 +611,7 @@ export default function App() {
               setIntelligenceInitialStep("input");
               setCurrentView("intelligence");
             }}
-            onDirectNew={(projectName, name, template, initialQs, targetType, targetCode, enableAI) => {
-              const hasCompanyName = Boolean(name.trim());
-              const shouldStartBackgroundAI = enableAI !== false && hasCompanyName;
-              const initRes = {
-                projectName: projectName,
-                companyName: name,
-                targetType: targetType || "company",
-                targetCode: targetCode || "",
-                isSkip: !shouldStartBackgroundAI,
-                isPending: shouldStartBackgroundAI,
-                template: template,
-                questions: initialQs
-              };
-              setStandaloneShell(false);
-              setCurrentView("dashboard");
-              if (shouldStartBackgroundAI) {
-                handleStartBackgroundAI(initRes);
-              } else {
-                setIntelligenceResult(initRes);
-                setIsBackgroundAnalyzing(false);
-                setHasBackgroundResult(false);
-              }
-            }}
+            onDirectNew={handleDirectNewProject}
           />
         )}
 

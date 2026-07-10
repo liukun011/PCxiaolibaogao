@@ -474,22 +474,22 @@ export const RecordingsView: React.FC<RecordingsViewProps> = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-8">
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-8 pb-4 pt-8">
         <div className="text-sm text-slate-500">
           我的资源 <span className="mx-2 text-slate-300">/</span>
           <span className="font-medium text-slate-800">我的录音</span>
         </div>
-        <div className="flex items-center gap-4">
-          <label className="flex h-9 w-72 items-center rounded-full border border-slate-200 bg-white px-4 text-slate-400 shadow-sm">
+        <div className="flex items-center gap-3">
+          <label className="flex h-10 w-72 items-center rounded-xl border border-slate-200 bg-white px-4 text-slate-400 shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
             <input
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               placeholder="输入搜索关键字"
-              className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
             />
-            <Search size={17} />
+            <Search size={16} />
           </label>
-          <button className="inline-flex h-9 items-center gap-2 rounded-full bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition-colors hover:bg-blue-700">
+          <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition-colors hover:bg-blue-700">
             <Plus size={16} />
             上传录音
           </button>

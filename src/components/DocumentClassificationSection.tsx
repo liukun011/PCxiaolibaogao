@@ -1732,29 +1732,14 @@ export const DocumentClassificationSection = ({
                       </button>
 
                       <div
-                        className={`absolute right-0 top-[calc(100%+8px)] z-20 w-72 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-xl transition-all ${
+                        className={`absolute bottom-[calc(100%+8px)] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-700 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-md transition-all ${
                           showParseFailuresPopover
-                            ? 'visible pointer-events-auto opacity-100'
+                            ? 'visible pointer-events-none opacity-100'
                             : 'invisible pointer-events-none opacity-0'
                         }`}
                       >
-                        <div className="absolute -top-2 right-6 h-4 w-4 rotate-45 border-l border-t border-gray-200 bg-white" />
-                        <div className="text-[11px] font-bold text-gray-800">
-                          {failedFiles.length > 0 ? `解析失败文件 (${failedFiles.length})` : '暂无解析失败文件'}
-                        </div>
-                        {failedFiles.length > 0 ? (
-                          <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1">
-                            {failedFiles.map((file) => (
-                              <div key={file.id} className="rounded-lg bg-red-50/80 px-2.5 py-2">
-                                <div className="truncate text-[11px] font-medium text-gray-800">{file.title}</div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-2 text-[10px] leading-5 text-gray-500">
-                            当前资料解析正常，如后续出现失败文件，会在这里统一提示。
-                          </div>
-                        )}
+                        重新解析项目下所有失败文件
+                        <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-700" />
                       </div>
                     </div>
                   )}

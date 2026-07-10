@@ -505,8 +505,8 @@ export const TemplatesView = ({
     <div className="flex h-full flex-col overflow-hidden bg-slate-50 p-8">
       <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h1 className="text-base font-bold text-gray-800">报告模板</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">
+          <h1 className="text-xl font-bold leading-7 tracking-normal text-slate-900">报告模板</h1>
+          <p className="mt-1 text-sm font-medium text-slate-500">
             沉淀成熟报告结构，快速复用高质量业务模板
           </p>
         </div>
@@ -517,20 +517,20 @@ export const TemplatesView = ({
               value={searchKeyword}
               onChange={(event) => setSearchKeyword(event.target.value)}
               placeholder="请搜索模板名称"
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-10 text-sm text-gray-700 outline-none transition focus:border-blue-500 sm:w-72"
+              className="h-10 w-full rounded-xl border border-gray-200 bg-white py-2 pl-4 pr-10 text-sm font-medium text-gray-700 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 sm:w-72"
             />
-            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
           <button
             onClick={handleSampleGenerateClick}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-50"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50"
           >
             <Sparkles size={16} />
             <span>通过样例生成</span>
           </button>
           <button
             onClick={handleUploadClick}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition-colors hover:bg-blue-700"
           >
             <Plus size={16} />
             <span>生成模板</span>
